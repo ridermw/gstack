@@ -252,18 +252,18 @@ bun run build
 
 ### What changes between hosts
 
-| Aspect | Claude | Codex / Copilot |
-|--------|--------|-----------------|
-| Output directory | `{skill}/SKILL.md` | `.agents/skills/gstack-{skill}/SKILL.md` (generated at setup, gitignored) |
-| Frontmatter | Full (name, description, allowed-tools, hooks, version) | Minimal (name + description only) |
-| Paths | `~/.claude/skills/gstack` | `$GSTACK_ROOT` (`.agents/skills/gstack` in a repo, otherwise `~/.codex/skills/gstack` or `~/.copilot/skills/gstack`) |
-| Hook skills | `hooks:` frontmatter (enforced by Claude) | Inline safety advisory prose (advisory only) |
-| `/codex` skill | Included (Claude wraps codex exec) | Excluded (self-referential) |
+| Aspect | Claude | Codex | Copilot |
+|--------|--------|-------|---------|
+| Output directory | `{skill}/SKILL.md` | `.agents/skills/gstack-{skill}/SKILL.md` (generated at setup, gitignored) | `.agents/skills/gstack-{skill}/SKILL.md` (generated at setup, gitignored) |
+| Frontmatter | Full (name, description, allowed-tools, hooks, version) | Minimal (name + description only) | Minimal (name + description only) |
+| Paths | `~/.claude/skills/gstack` | `$GSTACK_ROOT` (`.agents/skills/gstack` in a repo, otherwise `~/.codex/skills/gstack`) | `$GSTACK_ROOT` (`.agents/skills/gstack` in a repo, otherwise `~/.copilot/skills/gstack`) |
+| Hook skills | `hooks:` frontmatter (enforced by Claude) | Inline safety advisory prose (advisory only) | Inline safety advisory prose (advisory only) |
+| `/codex` skill | Included (Claude wraps codex exec) | Excluded (self-referential) | Excluded (self-referential) |
 
-### Testing Codex/Copilot output
+### Testing Codex and Copilot output
 
 ```bash
-# Run all static tests (includes Codex/Copilot validation)
+# Run all static tests (includes Codex and Copilot validation)
 bun test
 
 # Check freshness for all hosts
@@ -277,7 +277,7 @@ bun run skill:check
 
 ### Dev setup for .agents/
 
-When you run `bin/dev-setup`, it creates symlinks in both `.claude/skills/` and `.agents/skills/` (if applicable), so Codex/Copilot-compatible agents can discover your dev skills too. The `.agents/` directory is generated at setup time from `.tmpl` templates — it is gitignored and not committed.
+When you run `bin/dev-setup`, it creates symlinks in both `.claude/skills/` and `.agents/skills/` (if applicable), so Codex, Copilot, and other compatible agents can discover your dev skills too. The `.agents/` directory is generated at setup time from `.tmpl` templates — it is gitignored and not committed.
 
 ### Adding a new skill
 

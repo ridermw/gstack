@@ -139,7 +139,7 @@ fi
 # bun run build already does this, but we need it when NEEDS_BUILD=0 (binary is fresh).
 # Always regenerate: generation is fast (<2s) and mtime-based staleness checks are fragile
 # (miss stale files when timestamps match after clone/checkout/upgrade).
-# Codex and Copilot both use .agents/skills/ — generate once with --host codex.
+# Codex, Copilot, and other .agents/ hosts share .agents/skills/ — generate once with --host codex.
 AGENTS_DIR="$SOURCE_GSTACK_DIR/.agents/skills"
 NEEDS_AGENTS_GEN=1
 
@@ -482,8 +482,8 @@ if [ "$INSTALL_COPILOT" -eq 1 ]; then
   fi
 fi
 
-# 8. Create .agents/ sidecar symlinks for the real Codex/Copilot skill target.
-# The root Codex/Copilot skill ends up pointing at $SOURCE_GSTACK_DIR/.agents/skills/gstack,
+# 8. Create .agents/ sidecar symlinks for Codex and Copilot skill targets.
+# The root skill ends up pointing at $SOURCE_GSTACK_DIR/.agents/skills/gstack,
 # so the runtime assets must live there for both global and repo-local installs.
 if [ "$INSTALL_CODEX" -eq 1 ] || [ "$INSTALL_COPILOT" -eq 1 ]; then
   create_agents_sidecar "$SOURCE_GSTACK_DIR"

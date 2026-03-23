@@ -2983,7 +2983,7 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
   // Determine skill directory relative to ROOT
   const skillDir = path.relative(ROOT, path.dirname(tmplPath));
 
-  // For codex/copilot host, route output to .agents/skills/{codexSkillName}/SKILL.md
+  // For non-Claude hosts (codex, copilot), route output to .agents/skills/{codexSkillName}/SKILL.md
   if (host === 'codex' || host === 'copilot') {
     const codexName = codexSkillName(skillDir === '.' ? '' : skillDir);
     outputDir = path.join(ROOT, '.agents', 'skills', codexName);
@@ -3016,7 +3016,7 @@ function processTemplate(tmplPath: string, host: Host = 'claude'): { outputPath:
     throw new Error(`Unresolved placeholders in ${relTmplPath}: ${remaining.join(', ')}`);
   }
 
-  // For codex/copilot host: transform frontmatter and replace Claude-specific paths
+  // For non-Claude hosts (codex, copilot): transform frontmatter and replace Claude-specific paths
   if (host === 'codex' || host === 'copilot') {
     // Extract hook safety prose BEFORE transforming frontmatter (which strips hooks)
     const safetyProse = extractHookSafetyProse(tmplContent);
@@ -3077,7 +3077,7 @@ function findTemplates(): string[] {
 let hasChanges = false;
 
 for (const tmplPath of findTemplates()) {
-  // Skip /codex skill for codex/copilot host (self-referential — it's a Claude wrapper around codex exec)
+  // Skip /codex skill for non-Claude hosts (self-referential — it's a Claude wrapper around codex exec)
   if (HOST === 'codex' || HOST === 'copilot') {
     const dir = path.basename(path.dirname(tmplPath));
     if (dir === 'codex') continue;
