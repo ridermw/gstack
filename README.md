@@ -65,7 +65,7 @@ git clone https://github.com/garrytan/gstack.git .agents/skills/gstack
 cd .agents/skills/gstack && ./setup --host codex   # or --host copilot
 ```
 
-When setup runs from `.agents/skills/gstack`, it installs the generated Codex/Copilot skills next to it in the same repo and does not write to `~/.codex/skills` or `~/.copilot/skills`.
+When setup runs from `.agents/skills/gstack`, it installs the generated Codex and Copilot skills next to it in the same repo and does not write to `~/.codex/skills` or `~/.copilot/skills`.
 
 Install once for your user account:
 
@@ -86,7 +86,7 @@ git clone https://github.com/garrytan/gstack.git ~/gstack
 cd ~/gstack && ./setup --host auto
 ```
 
-For Codex/Copilot-compatible hosts, setup now supports both repo-local installs from `.agents/skills/gstack` and user-global installs from `~/.codex/skills/gstack` or `~/.copilot/skills/gstack`. All 28 skills work across all supported agents. Hook-based safety skills (careful, freeze, guard) use inline safety advisory prose on non-Claude hosts.
+For Codex, Copilot, and other compatible hosts, setup supports both repo-local installs from `.agents/skills/gstack` and user-global installs from `~/.codex/skills/gstack` or `~/.copilot/skills/gstack`. All 28 skills work across all supported agents. Hook-based safety skills (careful, freeze, guard) use inline safety advisory prose on non-Claude hosts.
 
 ## See it work
 
