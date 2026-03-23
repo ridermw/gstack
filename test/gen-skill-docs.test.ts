@@ -1316,7 +1316,7 @@ describe('setup script validation', () => {
   test('auto mode detects claude, codex, copilot, and kiro binaries', () => {
     expect(setupContent).toContain('command -v claude');
     expect(setupContent).toContain('command -v codex');
-    expect(setupContent).toContain('gh copilot --version');
+    expect(setupContent).toContain('command -v copilot');
     expect(setupContent).toContain('command -v kiro-cli');
   });
 

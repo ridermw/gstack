@@ -1,13 +1,13 @@
 /**
  * Copilot CLI E2E tests — verify skills work when invoked by GitHub Copilot CLI.
  *
- * Spawns `gh copilot suggest` with skills installed in a temp HOME, captures
+ * Spawns `copilot -p` with skills installed in a temp HOME, captures
  * output, and validates results. Follows the same pattern as codex-e2e.test.ts
- * but adapted for the GitHub Copilot CLI (gh extension).
+ * but adapted for the standalone GitHub Copilot CLI.
  *
  * Prerequisites:
- * - `gh` CLI installed with the copilot extension (`gh extension install github/gh-copilot`)
- * - Copilot authenticated via GitHub CLI
+ * - Copilot CLI installed (`npm install -g @github/copilot`)
+ * - Copilot authenticated (`copilot` → `/login`)
  * - EVALS=1 env var set (same gate as Claude/Codex E2E tests)
  *
  * Skips gracefully when prerequisites are not met.
@@ -29,14 +29,14 @@ const ROOT = path.resolve(import.meta.dir, '..');
 
 const COPILOT_AVAILABLE = (() => {
   try {
-    const result = Bun.spawnSync(['gh', 'copilot', '--version']);
+    const result = Bun.spawnSync(['copilot', '--version']);
     return result.exitCode === 0;
   } catch { return false; }
 })();
 
 const evalsEnabled = !!process.env.EVALS;
 
-// Skip all tests if gh copilot is not available or EVALS is not set.
+// Skip all tests if copilot CLI is not available or EVALS is not set.
 const SKIP = !COPILOT_AVAILABLE || !evalsEnabled;
 
 const describeCopilot = SKIP ? describe.skip : describe;
@@ -45,7 +45,7 @@ const describeCopilot = SKIP ? describe.skip : describe;
 if (!evalsEnabled) {
   // Silent — same as Claude/Codex E2E tests, EVALS=1 required
 } else if (!COPILOT_AVAILABLE) {
-  process.stderr.write('\nCopilot E2E: SKIPPED — gh copilot not found (install: gh extension install github/gh-copilot)\n');
+  process.stderr.write('\nCopilot E2E: SKIPPED — copilot CLI not found (install: npm install -g @github/copilot)\n');
 }
 
 // --- Diff-based test selection ---
@@ -70,7 +70,7 @@ afterAll(async () => {
 // --- Tests ---
 
 describeCopilot('Copilot CLI E2E', () => {
-  test('copilot-discover-skill: gh copilot can suggest with gstack skill context', async () => {
+  test('copilot-discover-skill: copilot CLI can run with gstack skill context', async () => {
     // Diff-based test selection
     if (selectedTests !== null && !selectedTests.includes('copilot-discover-skill')) {
       return; // skip — not affected by current diff

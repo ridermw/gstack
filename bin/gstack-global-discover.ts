@@ -442,8 +442,8 @@ function scanGemini(since: Date): Session[] {
 }
 
 function scanCopilot(since: Date): Session[] {
-  // GitHub Copilot CLI stores conversation history in ~/.config/gh-copilot/
-  const configDir = join(homedir(), ".config", "gh-copilot");
+  // GitHub Copilot CLI (standalone) stores session data in ~/.copilot/session-state/
+  const configDir = join(homedir(), ".copilot", "session-state");
   if (!existsSync(configDir)) return [];
 
   const sessions: Session[] = [];
