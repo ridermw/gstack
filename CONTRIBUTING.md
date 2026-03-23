@@ -230,7 +230,7 @@ To add a browse command, add it to `browse/src/commands.ts`. To add a snapshot f
 
 ## Multi-host development (Claude + Codex + Copilot)
 
-gstack generates SKILL.md files for multiple hosts: **Claude** (`.claude/skills/`), **Codex** (`.agents/skills/`), and **Copilot** (`.agents/skills/`). Codex and Copilot share the same `.agents/skills/` output directory — only `--host codex` needs to be run during generation. Copilot-specific paths are rewritten at `setup --host copilot` time (same pattern as Kiro). Every template change needs to be generated for Claude and Codex.
+gstack generates SKILL.md files for multiple hosts: **Claude** (`.claude/skills/`), **Codex** (`.agents/skills/`), and **Copilot** (`.agents/skills/`). Codex and Copilot share the same `.agents/skills/` output directory — only `--host codex` needs to be run during generation. Copilot-specific paths are rewritten at `setup --host copilot` time via sed. Every template change needs to be generated for Claude and Codex.
 
 ### Generating for all hosts
 
@@ -254,7 +254,7 @@ bun run build
 | Frontmatter | Full (name, description, allowed-tools, hooks, version) | Minimal (name + description only) | Minimal (name + description only) |
 | Paths | `~/.claude/skills/gstack` | `$GSTACK_ROOT` (`.agents/skills/gstack` in a repo, otherwise `~/.codex/skills/gstack`) | `$GSTACK_ROOT` (`.agents/skills/gstack` in a repo, otherwise `~/.copilot/skills/gstack`) |
 | Hook skills | `hooks:` frontmatter (enforced by Claude) | Inline safety advisory prose (advisory only) | Inline safety advisory prose (advisory only) |
-| `/codex` skill | Included (Claude wraps codex exec) | Excluded (self-referential) | Excluded (self-referential) |
+| `/codex` skill | Included (Claude wraps codex exec) | Excluded (self-referential) | Excluded (shares Codex output) |
 
 ### Testing Codex and Copilot output
 
