@@ -1,13 +1,13 @@
 /**
  * Copilot CLI subprocess runner for skill E2E testing.
  *
- * Spawns `gh copilot suggest` as a completely independent process and returns
+ * Spawns `copilot -p` as a completely independent process and returns
  * structured results. Follows the same pattern as codex-session-runner.ts but
- * adapted for the GitHub Copilot CLI (gh copilot extension).
+ * adapted for the standalone GitHub Copilot CLI.
  *
  * Key differences from Codex session-runner:
- * - Uses `gh copilot suggest` instead of `codex exec`
- * - Copilot CLI is a gh extension, not a standalone binary
+ * - Uses `copilot -p` instead of `codex exec`
+ * - Copilot CLI is a standalone binary (not a gh extension)
  * - Needs temp HOME with skill installed at ~/.copilot/skills/{skillName}/SKILL.md
  */
 
@@ -52,10 +52,10 @@ export function installSkillToTempHome(
 // --- Main runner ---
 
 /**
- * Run a Copilot skill via `gh copilot suggest` and return structured results.
+ * Run a Copilot skill via `copilot -p` and return structured results.
  *
- * Spawns gh copilot in a temp HOME with the skill installed, captures output,
- * and returns a CopilotResult. Skips gracefully if gh copilot is not found.
+ * Spawns copilot in a temp HOME with the skill installed, captures output,
+ * and returns a CopilotResult. Skips gracefully if copilot is not found.
  */
 export async function runCopilotSkill(opts: {
   skillDir: string;         // Path to skill directory containing SKILL.md
@@ -75,11 +75,11 @@ export async function runCopilotSkill(opts: {
   const startTime = Date.now();
   const name = skillName || path.basename(skillDir) || 'gstack';
 
-  // Check if gh copilot is available
-  const whichResult = Bun.spawnSync(['gh', 'copilot', '--version']);
+  // Check if copilot CLI is available
+  const whichResult = Bun.spawnSync(['copilot', '--version']);
   if (whichResult.exitCode !== 0) {
     return {
-      output: 'SKIP: gh copilot not found',
+      output: 'SKIP: copilot CLI not found',
       exitCode: -1,
       durationMs: Date.now() - startTime,
       rawOutput: '',
@@ -92,11 +92,11 @@ export async function runCopilotSkill(opts: {
   try {
     installSkillToTempHome(skillDir, name, tempHome);
 
-    // Build gh copilot suggest command
-    const args = ['copilot', 'suggest', '-t', 'shell', prompt];
+    // Build copilot command
+    const args = ['-p', prompt];
 
-    // Spawn gh copilot with temp HOME
-    const proc = Bun.spawn(['gh', ...args], {
+    // Spawn copilot with temp HOME
+    const proc = Bun.spawn(['copilot', ...args], {
       cwd: cwd || skillDir,
       stdout: 'pipe',
       stderr: 'pipe',

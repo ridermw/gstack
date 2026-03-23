@@ -45,7 +45,7 @@ INSTALL_KIRO=0
 if [ "$HOST" = "auto" ]; then
   command -v claude >/dev/null 2>&1 && INSTALL_CLAUDE=1
   command -v codex >/dev/null 2>&1 && INSTALL_CODEX=1
-  command -v gh >/dev/null 2>&1 && gh copilot --version >/dev/null 2>&1 && INSTALL_COPILOT=1
+  command -v copilot >/dev/null 2>&1 && INSTALL_COPILOT=1
   command -v kiro-cli >/dev/null 2>&1 && INSTALL_KIRO=1
   # If none found, default to claude
   if [ "$INSTALL_CLAUDE" -eq 0 ] && [ "$INSTALL_CODEX" -eq 0 ] && [ "$INSTALL_COPILOT" -eq 0 ] && [ "$INSTALL_KIRO" -eq 0 ]; then
