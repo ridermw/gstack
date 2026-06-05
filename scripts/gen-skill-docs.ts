@@ -468,10 +468,11 @@ policy:
 
 function generateCopilotPluginJson(): string {
   const version = fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf-8').trim();
+  const pluginVersion = version.replace(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/, '$1.$2.$3+$4');
   return JSON.stringify({
     name: 'gstack',
     description: 'gstack skills for GitHub Copilot CLI',
-    version,
+    version: pluginVersion,
     skills: 'skills/',
   }, null, 2) + '\n';
 }

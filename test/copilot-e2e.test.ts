@@ -56,7 +56,7 @@ if (evalsEnabled && SKIP) {
 
 function testIfSelected(testName: string, fn: () => Promise<void>, timeout: number) {
   const shouldRun = selectedTests === null || selectedTests.includes(testName);
-  (shouldRun ? test.concurrent : test.skip)(testName, fn, timeout);
+  (shouldRun ? test : test.skip)(testName, fn, timeout);
 }
 
 const evalCollector = evalsEnabled && !SKIP ? new EvalCollector('e2e-copilot') : null;

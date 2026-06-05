@@ -19,7 +19,7 @@ Measured from this branch's diff against `origin/main`, plus the live install ru
 | Copilot E2E coverage | none | `bun run test:copilot` | new |
 | Generated skill files refreshed | 0 | 56 | enterprise-safe text propagated |
 
-The live check installed `gstack (v1.56.0.0)` into Copilot, verified `bin/gstack-config`, `browse/dist/browse`, `design/dist/design`, `review/checklist.md`, and `plan-devex-review/dx-hall-of-fame.md` under the Copilot runtime root, then passed the Copilot smoke test in about 1 second. Gate-tier eval selection now skips Copilot without touching live auth when no Copilot tests are selected.
+The live check installed the generated gstack plugin into Copilot, verified `bin/gstack-config`, `browse/dist/browse`, `design/dist/design`, `review/checklist.md`, and `plan-devex-review/dx-hall-of-fame.md` under the Copilot runtime root, then passed the Copilot smoke test in about 1 second. Gate-tier eval selection now skips Copilot without touching live auth when no Copilot tests are selected.
 
 ### What this means for enterprise laptops
 

@@ -463,7 +463,7 @@ describe('gen-skill-docs', () => {
       expect(JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))).toMatchObject({
         name: 'gstack',
         description: 'gstack skills for GitHub Copilot CLI',
-        version: fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf-8').trim(),
+        version: fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf-8').trim().replace(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/, '$1.$2.$3+$4'),
         skills: 'skills/',
       });
     } finally {
