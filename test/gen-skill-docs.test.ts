@@ -219,6 +219,18 @@ function runCopilotGenerate(): { exitCode: number | null; output: string } {
   };
 }
 
+function runHostAllDryRun(): { exitCode: number | null; output: string } {
+  const result = Bun.spawnSync(['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', 'all', '--dry-run'], {
+    cwd: ROOT,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  return {
+    exitCode: result.exitCode,
+    output: result.stdout.toString() + result.stderr.toString(),
+  };
+}
+
 type DirSnapshotEntry =
   | { kind: 'dir'; rel: string }
   | { kind: 'file'; rel: string; data: Buffer }
@@ -450,6 +462,21 @@ describe('gen-skill-docs', () => {
 
     expect(output).toMatch(/(?:FRESH|STALE): \.copilot-plugin\/plugin\.json/);
   });
+
+  test('host-all dry-run skips missing gitignored Copilot plugin output', () => {
+    const pluginDir = path.join(ROOT, '.copilot-plugin');
+    const before = snapshotDir(pluginDir);
+    try {
+      fs.rmSync(pluginDir, { recursive: true, force: true });
+
+      const result = runHostAllDryRun();
+      expect(result.exitCode, result.output).toBe(0);
+      expect(result.output).toContain('SKIPPED (missing gitignored generated output): .copilot-plugin');
+      expect(fs.existsSync(pluginDir)).toBe(false);
+    } finally {
+      restoreDir(pluginDir, before);
+    }
+  }, 120_000);
 
   test('Copilot generator writes plugin.json with the required JSON fields', () => {
     const pluginDir = path.join(ROOT, '.copilot-plugin');

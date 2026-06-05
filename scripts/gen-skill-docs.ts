@@ -728,7 +728,7 @@ function processExternalHost(
 
   const name = externalSkillName(skillDir === '.' ? '' : skillDir, frontmatterName);
   const outputDir = path.join(ROOT, hostConfig.hostSubdir, 'skills', name);
-  fs.mkdirSync(outputDir, { recursive: true });
+  if (!DRY_RUN) fs.mkdirSync(outputDir, { recursive: true });
   const outputPath = path.join(outputDir, 'SKILL.md');
 
   // Guard against symlink loops
@@ -761,7 +761,7 @@ function processExternalHost(
   result = applyHostRewrites(result, hostConfig);
 
   // Config-driven: generate metadata (e.g., openai.yaml for Codex)
-  if (hostConfig.generation.generateMetadata && !symlinkLoop) {
+  if (hostConfig.generation.generateMetadata && !symlinkLoop && !DRY_RUN) {
     const agentsDir = path.join(outputDir, 'agents');
     fs.mkdirSync(agentsDir, { recursive: true });
     const shortDescription = condenseOpenAIShortDescription(extractedDescription);
@@ -914,6 +914,16 @@ for (const currentHost of hostsToRun) {
     }> = {};
 
     const currentHostConfig = getHostConfig(currentHost);
+    if (
+      DRY_RUN &&
+      HOST_ARG_VAL === 'all' &&
+      currentHost === 'copilot' &&
+      !fs.existsSync(path.join(ROOT, currentHostConfig.hostSubdir))
+    ) {
+      console.log(`SKIPPED (missing gitignored generated output): ${currentHostConfig.hostSubdir}`);
+      continue;
+    }
+
     for (const tmplPath of findTemplates()) {
       const dir = path.basename(path.dirname(tmplPath));
 
