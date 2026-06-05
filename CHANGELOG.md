@@ -1,5 +1,50 @@
 # Changelog
 
+## [1.60.0.0] - 2026-06-05
+
+## **Copilot CLI is now a real gstack host. Enterprise-safe skills are the default.**
+
+You can now run `./setup --host copilot` and get a persistent GitHub Copilot CLI install, not a one-off `--plugin-dir` demo. Setup generates a local `.copilot-plugin`, installs it with Copilot's plugin command, builds a runtime root at `~/.copilot/plugins/gstack`, and makes the generated skills resolve gstack binaries and assets from any local working directory. The generated skill corpus also drops off-machine telemetry prompts and Boil Lake/Ocean speeches while keeping the parts that matter: complete solutions, search first, review, tests, and verification. This is the Copilot harness beside Claude and Codex, with enterprise-device language cleaned up across hosts.
+
+### The numbers that matter
+
+Measured from this branch's diff against `origin/main`, plus the live install run:
+
+| Metric | Before | After | Δ |
+|--------|--------|-------|---|
+| Registered hosts | 10 | 11 | +1 Copilot CLI host |
+| Copilot persistent setup path | none | `./setup --host copilot` | new |
+| Copilot plugin manifest | none | `.copilot-plugin/plugin.json` | new |
+| Copilot runtime assets | none | 14 directory links + 2 root files | new |
+| Copilot E2E coverage | none | `bun run test:copilot` | new |
+| Generated skill files refreshed | 0 | 56 | enterprise-safe text propagated |
+
+The live check installed `gstack (v1.56.0.0)` into Copilot, verified `bin/gstack-config`, `browse/dist/browse`, `design/dist/design`, `review/checklist.md`, and `plan-devex-review/dx-hall-of-fame.md` under the Copilot runtime root, then passed the Copilot smoke test in about 1 second. Gate-tier eval selection now skips Copilot without touching live auth when no Copilot tests are selected.
+
+### What this means for enterprise laptops
+
+Copilot CLI gets the same first-class treatment as the other harnesses: generated skills, setup support, docs, optional E2E, and runtime assets that work outside the source checkout. The skill text no longer asks users on internal machines to accept phone-home framing or sit through branding lectures. It still tells the agent to do the hard engineering work. Run `./setup --host copilot`, then use gstack skills from Copilot anywhere locally.
+
+### Itemized changes
+
+#### Added
+- GitHub Copilot CLI host config in `hosts/copilot.ts`, registered in the host registry.
+- `.copilot-plugin/plugin.json` generation with `name`, `description`, `version`, and `skills: "skills/"`.
+- `./setup --host copilot` generation, reinstall, uninstall guidance, and runtime-root creation under `~/.copilot/plugins/gstack`.
+- Optional Copilot E2E smoke test, parser/prerequisite helper, and `test:copilot` scripts.
+- Static contract tests for Copilot plugin shape, setup behavior, runtime-root creation, reinstall detection, and E2E tier selection.
+
+#### Changed
+- Generated skill preambles now choose a repo-local runtime root only when runtime binaries exist, avoiding skills-only directories that cannot run gstack tools.
+- Generated skill language removes off-machine telemetry prompts, phone-home framing, Boil Lake/Ocean speeches, Garry-shaped branding, and founder-cosplay wording.
+- Methodology sections were retuned in enterprise-neutral language while preserving completeness, search-before-building, review, tests, and verification requirements.
+- README and host-adding docs now distinguish persistent Copilot install from dev/debug `--plugin-dir` usage.
+
+#### Fixed
+- Copilot setup reinstall detection now recognizes `gstack@...` plugin-list entries, so reruns remain idempotent.
+- Copilot E2E gate-tier selection no longer performs live Copilot prerequisite checks when zero Copilot tests are selected.
+- Runtime assets needed by generated Copilot skills are linked before plugin install, so persistent installs work outside the gstack checkout.
+
 ## [1.56.0.0] - 2026-06-03
 
 ## **Five heavy skills now load their bulk on demand, the shared question preamble slimmed corpus-wide, and a paranoid test suite proves the questions never got worse.**
