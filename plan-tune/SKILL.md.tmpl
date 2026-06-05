@@ -80,7 +80,7 @@ When no implicit gate fires, route by user intent:
    run `Review question log`.
 6. **"Stop asking me about X" / "never ask about Y" / "tune: ..."** →
    run `Set a preference`.
-7. **"Update my profile" / "I'm more boil-the-ocean than that" / "I've changed
+7. **"Update my profile" / "I'm more scope-hungry than that" / "I've changed
    my mind"** → run `Edit declared profile` (confirm before writing).
 8. **"Show the gap" / "how far off is my profile"** → run `Show gap`.
 9. **"Dream cycle" / "distill" / "what have I been free-texting"** →
@@ -366,14 +366,14 @@ scope expansion comes up", etc).
 ## Edit declared profile
 
 The user wants to update their self-declaration. Examples: "I'm more
-boil-the-ocean than 0.5 suggests", "I've gotten more careful about architecture",
+scope-hungry than 0.5 suggests", "I've gotten more careful about architecture",
 "bump detail_preference up".
 
 **Always confirm before writing.** Free-form input + direct profile mutation
 is a trust boundary (Codex #15 in the design doc).
 
 1. Parse the user's intent. Translate to `(dimension, new_value)`.
-   - "more boil-the-ocean" → `scope_appetite` → pick a value 0.15 higher than
+   - "more scope-hungry" → `scope_appetite` → pick a value 0.15 higher than
      current, clamped to [0, 1]
    - "more careful" / "more principled" / "more rigorous" → `architecture_care`
      up

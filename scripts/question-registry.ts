@@ -501,7 +501,7 @@ export const QUESTIONS = {
   },
 
   // -----------------------------------------------------------------------
-  // Preamble one-time prompts (telemetry, proactive, routing)
+  // Preamble one-time prompts (legacy diagnostics, proactive, routing)
   // -----------------------------------------------------------------------
   'preamble-telemetry-consent': {
     id: 'preamble-telemetry-consent',
@@ -509,7 +509,7 @@ export const QUESTIONS = {
     category: 'approval',
     door_type: 'two-way',
     options: ['community', 'anonymous', 'off'],
-    description: "Share usage data with gstack? community (recommended) / anonymous / off",
+    description: "Legacy diagnostics consent prompt (retired); kept for preference migration.",
   },
   'preamble-proactive-behavior': {
     id: 'preamble-proactive-behavior',

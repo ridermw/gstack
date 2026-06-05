@@ -32,8 +32,8 @@ describe('Audit compliance', () => {
   });
 
   // Fix 2: Conditional telemetry — binary calls wrapped with existence check
-  test('preamble telemetry calls are conditional on _TEL and binary existence', () => {
-    // After the preamble.ts refactor (Item 9), the bash/telemetry logic lives
+  test('preamble uses local diagnostics and no remote telemetry hook', () => {
+    // After the preamble.ts refactor (Item 9), the bash/diagnostic logic lives
     // in submodules under scripts/resolvers/preamble/. Concatenate all preamble
     // source (root + submodules) and assert against the combined text so this
     // test tracks the semantic contract, not the file layout.
@@ -43,15 +43,17 @@ describe('Audit compliance', () => {
       : [];
     const rootPreamble = readFileSync(join(ROOT, 'scripts/resolvers/preamble.ts'), 'utf-8');
     const preamble = [rootPreamble, ...submoduleFiles].join('\n');
-    // Pending finalization must check _TEL and binary existence
-    expect(preamble).toContain('_TEL" != "off"');
-    expect(preamble).toContain('-x ');
-    expect(preamble).toContain('gstack-telemetry-log');
-    // End-of-skill telemetry must also be conditional
-    const completionIdx = preamble.indexOf('Telemetry (run last)');
+    expect(preamble).not.toContain('gstack-telemetry-log');
+    expect(preamble).toContain('_TEL');
+    expect(preamble).toContain('!= "off"');
+    expect(preamble).toContain('Local Diagnostics (run last)');
+    const completionIdx = preamble.indexOf('Local Diagnostics (run last)');
     expect(completionIdx).toBeGreaterThan(-1);
     const completionSection = preamble.slice(completionIdx);
-    expect(completionSection).toContain('_TEL" != "off"');
+    expect(completionSection).toContain('~/.gstack/analytics/');
+    expect(completionSection).toContain('on this machine only');
+    expect(completionSection).toContain('${_TEL:-off}');
+    expect(completionSection).toContain('gstack-timeline-log');
   });
 
   // Round 2 Fix 1: W012 — Bun install uses checksum verification
@@ -112,13 +114,11 @@ describe('Audit compliance', () => {
     expect(cdp).toContain('--remote-allow-origins=');
   });
 
-  // Fix 2+6: All generated SKILL.md files with telemetry are conditional
-  test('all generated SKILL.md files with telemetry calls use conditional pattern', () => {
+  // Enterprise harness: generated skills should not contain remote telemetry hooks.
+  test('all generated SKILL.md files omit remote telemetry hook', () => {
     const skills = getAllSkillMds();
     for (const { name, content } of skills) {
-      if (content.includes('gstack-telemetry-log')) {
-        expect(content).toContain('_TEL" != "off"');
-      }
+      expect(content).not.toContain('gstack-telemetry-log');
     }
   });
 });

@@ -808,7 +808,7 @@ Before judging completion, classify HOW each item can be verified. The diff alon
 
 - **DIFF-VERIFIABLE** — A code change in this repo would manifest in \`git diff <base>...HEAD\`. Examples: "add UserService" (file appears), "validate input X" (validation logic appears), "create users table" (migration file appears).
 - **CROSS-REPO** — Item names a file or change in a sibling repo (e.g., \`domain-hq/docs/dashboard.md\`, \`~/Development/<other-repo>/...\`). The current diff CANNOT prove this.
-- **EXTERNAL-STATE** — Item names state in an external system: Supabase config/RLS, Cloudflare DNS, Vercel env vars, OAuth provider allowlists, third-party SaaS, DNS records. The current diff CANNOT prove this.
+- **EXTERNAL-STATE** — Item names state in an external system: database provider config/RLS, Cloudflare DNS, Vercel env vars, OAuth provider allowlists, third-party SaaS, DNS records. The current diff CANNOT prove this.
 - **CONTENT-SHAPE** — Item requires a file to follow a specific convention. If the file is in this repo: diff-verifiable. If in another repo or system: see CROSS-REPO / EXTERNAL-STATE.
 
 **Verification dispatch:**
@@ -818,7 +818,7 @@ Before judging completion, classify HOW each item can be verified. The diff alon
 - **EXTERNAL-STATE** → UNVERIFIABLE. Cite the system and the specific check the user must perform.
 - **CONTENT-SHAPE in another repo** → if the file exists, run any project-detected validator (see "Validator detection" below) before falling back to UNVERIFIABLE. With a validator: pass → DONE; fail → NOT DONE (cite validator output). No validator available: classify UNVERIFIABLE and cite both the file path and the convention to confirm.
 
-**Path concreteness rule.** If a plan item names a *concrete filesystem path* (absolute, \`~/...\`, or \`<sibling-repo>/<file>\`), it MUST be classified DONE or NOT DONE based on \`[ -f <path> ]\`. UNVERIFIABLE is only valid when the path is genuinely abstract ("Cloudflare DNS", "Supabase allowlist") or the sibling root is unreachable on this machine. "I don't want to check" is not unreachable.
+**Path concreteness rule.** If a plan item names a *concrete filesystem path* (absolute, \`~/...\`, or \`<sibling-repo>/<file>\`), it MUST be classified DONE or NOT DONE based on \`[ -f <path> ]\`. UNVERIFIABLE is only valid when the path is genuinely abstract ("Cloudflare DNS", "database provider allowlist") or the sibling root is unreachable on this machine. "I don't want to check" is not unreachable.
 
 **Validator detection.** Before falling back to UNVERIFIABLE on a CONTENT-SHAPE item, scan the target repo's \`package.json\` for any script matching \`validate-*\`, \`lint-wiki\`, \`check-docs\`, or similar. If found, invoke it with the relevant path argument (e.g., \`npm run validate-wiki -- <path>\`). For multi-target validators (e.g., \`validate-wiki --all\`), run once and reconcile per-item from the output. A passing validator promotes the item from UNVERIFIABLE to DONE; a failing one demotes to NOT DONE.
 
@@ -867,7 +867,7 @@ Plan: {plan file path}
 ## Cross-Repo / External Items
   [DONE]         sibling-repo has /docs/dashboard.md — verified at ~/Development/sibling-repo/docs/dashboard.md
   [UNVERIFIABLE] Cloudflare DNS-only on api.example.com — external system, manual check required
-  [UNVERIFIABLE] Supabase auth allowlist contains user email — external system, confirm in Supabase dashboard
+  [UNVERIFIABLE] Database auth allowlist contains user email — external system, confirm in the provider dashboard
 
 ─────────────────────────────────
 COMPLETION: 5/9 DONE, 1 PARTIAL, 1 NOT DONE, 1 CHANGED, 2 UNVERIFIABLE

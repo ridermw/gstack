@@ -186,18 +186,18 @@ rm -f /tmp/.gstack-brain-context-$$.md 2>/dev/null || true
 
 /**
  * Renders the at-skill-end background refresh hook. Fires after the skill's
- * own work completes (telemetry has already logged); kicks any digest whose
+ * own work completes (local diagnostics have already logged); kicks any digest whose
  * age exceeds half its TTL but hasn't yet expired, so the NEXT invocation
  * gets a fresh cache without paying the cold-miss tax.
  *
- * Subordinate to {{TELEMETRY}} — runs after. Doesn't block the user.
+ * Subordinate to completion logging — runs after. Doesn't block the user.
  */
 export function generateBrainCacheRefresh(ctx: TemplateContext): string {
   if (!isPreflightSkill(ctx.skillName)) return '';
   const binDir = ctx.paths.binDir;
   return `## Brain Cache Background Refresh
 
-After the skill's work completes (and telemetry has logged), kick a
+After the skill's work completes (and local diagnostics have logged), kick a
 background refresh of any cache digest that's getting close to its TTL.
 This is non-blocking — the user doesn't wait. Next invocation benefits
 from the warm cache.

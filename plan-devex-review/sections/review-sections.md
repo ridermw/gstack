@@ -780,7 +780,7 @@ eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)" 2>/dev/null || tru
 
 ## Brain Cache Background Refresh
 
-After the skill's work completes (and telemetry has logged), kick a
+After the skill's work completes (and local diagnostics have logged), kick a
 background refresh of any cache digest that's getting close to its TTL.
 This is non-blocking — the user doesn't wait. Next invocation benefits
 from the warm cache.

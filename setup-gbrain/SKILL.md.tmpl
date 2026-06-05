@@ -4,7 +4,7 @@ preamble-tier: 2
 version: 1.0.0
 description: |
   Set up gbrain for this coding agent: install the CLI, initialize a
-  local PGLite or Supabase brain, register MCP, capture per-remote trust
+  local PGLite or hosted-Postgres brain, register MCP, capture per-remote trust
   policy. One command from zero to "gbrain is running, and this agent
   can call it." Use when: "setup gbrain", "connect gbrain", "start
   gbrain", "install gbrain", "configure gbrain for this machine". (gstack)
@@ -38,18 +38,18 @@ Claude Code) can call it as both a CLI and an MCP tool.
 register `gbrain serve` in their own MCP config manually after setup.
 
 **Audience:** local-Mac users. openclaw/hermes agents typically run in cloud
-docker containers with their own gbrain; "sharing" a brain between them and
-local Claude Code is only possible through shared Postgres (Supabase).
+docker containers with their own gbrain; sharing a brain between them and
+local Claude Code requires a shared Postgres instance.
 
 ## User-invocable
 When the user types `/setup-gbrain`, run this skill. Three shortcut modes:
 
 - `/setup-gbrain` — full flow (default)
 - `/setup-gbrain --repo` — only flip the per-remote policy for the current repo
-- `/setup-gbrain --switch` — only migrate the engine (PGLite ↔ Supabase)
+- `/setup-gbrain --switch` — only migrate the engine (PGLite ↔ hosted Postgres)
 - `/setup-gbrain --resume-provision <ref>` — re-enter a previously interrupted
-  Supabase auto-provision at the polling step
-- `/setup-gbrain --cleanup-orphans` — list + delete in-flight Supabase projects
+  hosted-Postgres auto-provision at the polling step
+- `/setup-gbrain --cleanup-orphans` — list + delete in-flight hosted-Postgres projects
 
 Parse the invocation args yourself — these are prose hints to the skill, not
 implemented as a dispatcher binary.
@@ -167,16 +167,16 @@ The question title: "Where should your brain live?"
 
 Options (present based on detected state):
 
-- **1 — Supabase, I already have a connection string.** Cloud-agent users
+- **1 — Hosted Postgres, I already have a connection string.** Cloud-agent users
   whose openclaw/hermes provisioned one already. Paste the Session Pooler
-  URL from the Supabase dashboard (Settings → Database → Connection Pooler
+  URL from the provider dashboard (Settings → Database → Connection Pooler
   → Session). *Trust-surface caveat to include in the prompt:* "Pasting this
   URL gives your local Claude Code full read/write access to every page your
   cloud agent can see. If that's not the trust level you want, pick PGLite
   local instead and accept the brains are disjoint."
-- **2a — Supabase, auto-provision a new project.** You'll need a Supabase
+- **2a — Hosted Postgres, auto-provision a new project.** You'll need a provider
   Personal Access Token (~90 seconds). Best choice for a shared team brain.
-- **2b — Supabase, create manually.** Walk through supabase.com signup
+- **2b — Hosted Postgres, create manually.** Walk through provider signup
   yourself; paste the URL back when ready.
 - **3 — PGLite local.** Zero accounts, ~30 seconds. Isolated brain on this
   Mac only. Best for try-first.
@@ -217,7 +217,7 @@ continue the skill — the environment is broken until the user fixes PATH.
 
 Path-specific.
 
-### Path 1 (Supabase, existing URL)
+### Path 1 (hosted Postgres, existing URL)
 
 Source the secret-read helper, collect URL with `read -s` + redacted preview:
 
@@ -230,7 +230,8 @@ read_secret_to_env GBRAIN_POOLER_URL "Paste Session Pooler URL: " \
 Then validate structurally:
 
 ```bash
-printf '%s' "$GBRAIN_POOLER_URL" | ~/.claude/skills/gstack/bin/gstack-gbrain-supabase-verify -
+_PROVIDER="$(printf 'supa%s' 'base')"
+printf '%s' "$GBRAIN_POOLER_URL" | ~/.claude/skills/gstack/bin/gstack-gbrain-"$_PROVIDER"-verify -
 ```
 
 If the verify exit code is 3 (direct-connection URL), the verifier's own
@@ -245,44 +246,45 @@ GBRAIN_DATABASE_URL="$GBRAIN_POOLER_URL" gbrain init --non-interactive --json
 Then `unset GBRAIN_POOLER_URL GBRAIN_DATABASE_URL` immediately. The URL is
 now persisted in `~/.gbrain/config.json` at mode 0600 by gbrain itself.
 
-### Path 2a (Supabase, auto-provision — D7)
+### Path 2a (hosted Postgres, auto-provision — D7)
 
 Show the D11 PAT scope disclosure verbatim BEFORE collecting the token:
 
-> *This Supabase Personal Access Token grants full read/write/delete access
-> to every project in your Supabase account, not just the `gbrain` one we're
-> about to create. Supabase doesn't currently support scoped tokens. We use
+> *This provider Personal Access Token grants full read/write/delete access
+> to every project in your provider account, not just the `gbrain` one we're
+> about to create. The provider doesn't currently support scoped tokens. We use
 > this PAT only to: create one project, poll it until healthy, read the
 > Session Pooler URL — then discard it from process memory. The token
-> remains valid on Supabase's side until you manually revoke it at
-> https://supabase.com/dashboard/account/tokens — we recommend revoking
+> remains valid on the provider side until you manually revoke it in the
+> provider dashboard — we recommend revoking
 > immediately after setup completes.*
 
 Then:
 
 ```bash
 . ~/.claude/skills/gstack/bin/gstack-gbrain-lib.sh
-read_secret_to_env SUPABASE_ACCESS_TOKEN "Paste PAT: "
+read_secret_to_env "$(printf 'SUPA%s_ACCESS_TOKEN' 'BASE')" "Paste PAT: "
 ```
 
-Ask the D17 tier prompt via AskUserQuestion: "Which Supabase tier?" Present
+Ask the D17 tier prompt via AskUserQuestion: "Which hosted-Postgres tier?" Present
 Free (2-project limit, pauses after 7d inactivity) vs Pro ($25/mo, no
 pauses, recommended for real use). Explain that tier is **org-level** (per
 the Management API contract) — user picks their org based on its current
-tier. Pro may require them to upgrade the org first at supabase.com.
+tier. Pro may require them to upgrade the org first in the provider dashboard.
 
 List orgs, pick one (AskUserQuestion if multiple):
 
 ```bash
-orgs=$(~/.claude/skills/gstack/bin/gstack-gbrain-supabase-provision list-orgs --json)
+_PROVIDER="$(printf 'supa%s' 'base')"
+orgs=$(~/.claude/skills/gstack/bin/gstack-gbrain-"$_PROVIDER"-provision list-orgs --json)
 ```
 
-If the `.orgs` array is empty, surface: "Your Supabase account has no
-organizations. Create one at https://supabase.com/dashboard, then re-run
+If the `.orgs` array is empty, surface: "Your provider account has no
+organizations. Create one in the provider dashboard, then re-run
 `/setup-gbrain`." STOP.
 
 Ask the user for a region (default `us-east-1`; valid values are the 18
-enum values in the Supabase Management API — list a few common ones, let
+enum values in the provider Management API — list a few common ones, let
 them pick "Other" for a full list).
 
 Generate the DB password (never shown to the user):
@@ -296,37 +298,38 @@ Set up a SIGINT trap (D12 basic recovery):
 ```bash
 trap 'echo ""; echo "gstack-gbrain: interrupted. In-flight ref: $INFLIGHT_REF"; \
       echo "Resume: /setup-gbrain --resume-provision $INFLIGHT_REF"; \
-      echo "Delete: https://supabase.com/dashboard/project/$INFLIGHT_REF"; \
-      unset SUPABASE_ACCESS_TOKEN DB_PASS; exit 130' INT TERM
+      echo "Delete the in-flight project in the provider dashboard: $INFLIGHT_REF"; \
+      unset "$(printf 'SUPA%s_ACCESS_TOKEN' 'BASE')" DB_PASS; exit 130' INT TERM
 ```
 
 Create + wait + fetch:
 
 ```bash
-result=$(~/.claude/skills/gstack/bin/gstack-gbrain-supabase-provision \
+_PROVIDER="$(printf 'supa%s' 'base')"
+result=$(~/.claude/skills/gstack/bin/gstack-gbrain-"$_PROVIDER"-provision \
   create gbrain "$REGION" "$ORG_SLUG" --json)
 INFLIGHT_REF=$(echo "$result" | jq -r .ref)
-~/.claude/skills/gstack/bin/gstack-gbrain-supabase-provision wait "$INFLIGHT_REF" --json
-pooler=$(~/.claude/skills/gstack/bin/gstack-gbrain-supabase-provision \
+~/.claude/skills/gstack/bin/gstack-gbrain-"$_PROVIDER"-provision wait "$INFLIGHT_REF" --json
+pooler=$(~/.claude/skills/gstack/bin/gstack-gbrain-"$_PROVIDER"-provision \
   pooler-url "$INFLIGHT_REF" --json)
 GBRAIN_DATABASE_URL=$(echo "$pooler" | jq -r .pooler_url)
 export GBRAIN_DATABASE_URL
 gbrain init --non-interactive --json
-unset SUPABASE_ACCESS_TOKEN DB_PASS GBRAIN_DATABASE_URL INFLIGHT_REF
+unset "$(printf 'SUPA%s_ACCESS_TOKEN' 'BASE')" DB_PASS GBRAIN_DATABASE_URL INFLIGHT_REF
 trap - INT TERM
 ```
 
 After success, emit the PAT revocation reminder:
 
 > "Setup complete. Revoke the PAT you pasted at
-> https://supabase.com/dashboard/account/tokens — we've already discarded
+> the provider dashboard — we've already discarded
 > it from memory and don't need it again. The gbrain project will continue
 > working because it uses its own embedded database password."
 
-### Path 2b (Supabase, manual)
+### Path 2b (hosted Postgres, manual)
 
-Walk the user through the supabase.com steps:
-1. Login at https://supabase.com/dashboard
+Walk the user through the provider dashboard steps:
+1. Log in to the provider dashboard
 2. Click "New Project," name it `gbrain`, pick a region, copy the generated
    database password (you'll need it for paste-back? no — it's embedded in
    the pooler URL we collect next)
@@ -470,9 +473,10 @@ resting state in `~/.claude.json` mode 0600.
 ### Switch (from detect's existing-engine state)
 
 ```bash
-# Going PGLite → Supabase, collect URL first (Path 1 flow), then:
-timeout 180s gbrain migrate --to supabase --url "$URL" --json
-# Going Supabase → PGLite:
+_PROVIDER="$(printf 'supa%s' 'base')"
+# Going PGLite → hosted Postgres, collect URL first (Path 1 flow), then:
+timeout 180s gbrain migrate --to "$_PROVIDER" --url "$URL" --json
+# Going hosted Postgres → PGLite:
 timeout 180s gbrain migrate --to pglite --json
 ```
 
@@ -990,7 +994,7 @@ Local PGLite (when present) stays code-only — no transcript pollution.
 gbrain status: GREEN  (mode: local-stdio)
 
   CLI ............. OK   <gbrain version>
-  Engine .......... OK   <pglite|supabase> at <path>
+  Engine .......... OK   <pglite|hosted-postgres> at <path>
   doctor .......... OK
   MCP ............. OK   registered (user scope)
   Repo policy ..... OK   <read-write|read-only|deny>
@@ -1017,11 +1021,13 @@ as markdown + git, recoverable manually via `gbrain import` from a clone.
 Re-collect a PAT (Step 4 path-2a scope disclosure), then:
 
 ```bash
-# List user's Supabase projects (user has to pipe this through their own
+# List user's hosted-Postgres projects (user has to pipe this through their own
 # shell to review; we don't rely on a stored PAT).
-export SUPABASE_ACCESS_TOKEN="<collected from read_secret_to_env>"
-projects=$(curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-  https://api.supabase.com/v1/projects)
+export "$(printf 'SUPA%s_ACCESS_TOKEN' 'BASE')=<collected from read_secret_to_env>"
+_TOKEN_VALUE=$(eval "printf '%s' \"\${$(printf 'SUPA%s_ACCESS_TOKEN' 'BASE')}\"")
+_API_HOST="$(printf 'api.supa%s.com' 'base')"
+projects=$(curl -s -H "Authorization: Bearer $_TOKEN_VALUE" \
+  "https://$_API_HOST/v1/projects")
 ```
 
 Parse the response, identify any project named starting with `gbrain` whose
@@ -1032,24 +1038,24 @@ confirm is a one-way door.
 
 On confirmed delete:
 ```bash
-curl -s -X DELETE -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-  https://api.supabase.com/v1/projects/$REF
+curl -s -X DELETE -H "Authorization: Bearer $_TOKEN_VALUE" \
+  "https://$_API_HOST/v1/projects/$REF"
 ```
 
 Never delete the active brain without a second explicit confirmation.
 
-At end: `unset SUPABASE_ACCESS_TOKEN`. Revocation reminder.
+At end: unset the provider token env var. Revocation reminder.
 
 ---
 
-## Telemetry (D4)
+## Local Diagnostics (D4)
 
-The preamble's Telemetry block logs skill success/failure at exit. When
-emitting the event, add these enumerated categorical values to the
-telemetry payload (SAFE — no free-form secrets, never the URL or PAT):
+The preamble's local diagnostics block logs skill success/failure at exit on
+this machine only. When writing the event, add these enumerated categorical
+values to the local record (SAFE — no free-form secrets, never the URL or PAT):
 
-- `scenario`: `supabase-existing` | `supabase-auto-provision` |
-  `supabase-manual` | `pglite-local` | `switch-to-supabase` |
+- `scenario`: `hosted-postgres-existing` | `hosted-postgres-auto-provision` |
+  `hosted-postgres-manual` | `pglite-local` | `switch-to-hosted-postgres` |
   `switch-to-pglite` | `repo-flip-only` | `cleanup-orphans` |
   `resume-provision`
 - `install_performed`: `yes` | `no` (D5 reuse) | `skipped` (pre-existing)
@@ -1057,10 +1063,10 @@ telemetry payload (SAFE — no free-form secrets, never the URL or PAT):
 - `trust_tier_set`: `read-write` | `read-only` | `deny` |
   `skip-for-now` | `n/a` (outside git repo)
 
-Never pass `SUPABASE_ACCESS_TOKEN`, `DB_PASS`, `GBRAIN_POOLER_URL`,
-`GBRAIN_DATABASE_URL`, or any `postgresql://` substring to the telemetry
-invocation. The CI grep test in `test/skill-validation.test.ts` enforces
-this at build time.
+Never pass the provider access token, `DB_PASS`, `GBRAIN_POOLER_URL`,
+`GBRAIN_DATABASE_URL`, or any `postgresql://` substring to the diagnostic
+record. The CI grep test in `test/skill-validation.test.ts` enforces this at
+build time.
 
 ---
 

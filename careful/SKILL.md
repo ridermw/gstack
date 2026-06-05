@@ -1,5 +1,6 @@
 ---
 name: careful
+preamble-tier: 1
 version: 0.1.0
 description: Safety guardrails for destructive commands. (gstack)
 triggers:

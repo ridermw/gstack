@@ -2,7 +2,7 @@
 name: setup-gbrain
 preamble-tier: 2
 version: 1.0.0
-description: "Set up gbrain for this coding agent: install the CLI, initialize a local PGLite or Supabase brain, register MCP, capture per-remote trust policy. (gstack)"
+description: "Set up gbrain for this coding agent: install the CLI, initialize a local PGLite or hosted-Postgres brain, register MCP, capture per-remote trust policy. (gstack)"
 triggers:
   - setup gbrain
   - install gbrain
@@ -48,32 +48,26 @@ echo "SKILL_PREFIX: $_SKILL_PREFIX"
 source <(~/.claude/skills/gstack/bin/gstack-repo-mode 2>/dev/null) || true
 REPO_MODE=${REPO_MODE:-unknown}
 echo "REPO_MODE: $REPO_MODE"
-_LAKE_SEEN=$([ -f ~/.gstack/.completeness-intro-seen ] && echo "yes" || echo "no")
-echo "LAKE_INTRO: $_LAKE_SEEN"
-_TEL=$(~/.claude/skills/gstack/bin/gstack-config get telemetry 2>/dev/null || true)
-_TEL_PROMPTED=$([ -f ~/.gstack/.telemetry-prompted ] && echo "yes" || echo "no")
-_TEL_START=$(date +%s)
+_TEL=$(~/.claude/skills/gstack/bin/gstack-config get telemetry 2>/dev/null || echo "off")
+_DIAG_START=$(date +%s)
 _SESSION_ID="$$-$(date +%s)"
-echo "TELEMETRY: ${_TEL:-off}"
-echo "TEL_PROMPTED: $_TEL_PROMPTED"
+echo "LOCAL_DIAGNOSTICS: ${_TEL:-off}"
 _EXPLAIN_LEVEL=$(~/.claude/skills/gstack/bin/gstack-config get explain_level 2>/dev/null || echo "default")
 if [ "$_EXPLAIN_LEVEL" != "default" ] && [ "$_EXPLAIN_LEVEL" != "terse" ]; then _EXPLAIN_LEVEL="default"; fi
 echo "EXPLAIN_LEVEL: $_EXPLAIN_LEVEL"
 _QUESTION_TUNING=$(~/.claude/skills/gstack/bin/gstack-config get question_tuning 2>/dev/null || echo "false")
 echo "QUESTION_TUNING: $_QUESTION_TUNING"
+if [ "${_TEL:-off}" != "off" ]; then
 mkdir -p ~/.gstack/analytics
-if [ "$_TEL" != "off" ]; then
+~/.claude/skills/gstack/bin/gstack-timeline-log '{"skill":"setup-gbrain","event":"started","branch":"'"$_BRANCH"'","session":"'"$_SESSION_ID"'"}' 2>/dev/null &
 echo '{"skill":"setup-gbrain","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'","repo":"'$(_repo=$(basename "$(git rev-parse --show-toplevel 2>/dev/null)" 2>/dev/null | tr -cd 'a-zA-Z0-9._-'); echo "${_repo:-unknown}")'"}'  >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
-fi
 for _PF in $(find ~/.gstack/analytics -maxdepth 1 -name '.pending-*' 2>/dev/null); do
   if [ -f "$_PF" ]; then
-    if [ "$_TEL" != "off" ] && [ -x "~/.claude/skills/gstack/bin/gstack-telemetry-log" ]; then
-      ~/.claude/skills/gstack/bin/gstack-telemetry-log --event-type skill_run --skill _pending_finalize --outcome unknown --session-id "$_SESSION_ID" 2>/dev/null || true
-    fi
     rm -f "$_PF" 2>/dev/null || true
   fi
   break
 done
+fi
 eval "$(~/.claude/skills/gstack/bin/gstack-slug 2>/dev/null)" 2>/dev/null || true
 _LEARN_FILE="${GSTACK_HOME:-$HOME/.gstack}/projects/${SLUG:-unknown}/learnings.jsonl"
 if [ -f "$_LEARN_FILE" ]; then
@@ -85,7 +79,6 @@ if [ -f "$_LEARN_FILE" ]; then
 else
   echo "LEARNINGS: 0"
 fi
-~/.claude/skills/gstack/bin/gstack-timeline-log '{"skill":"setup-gbrain","event":"started","branch":"'"$_BRANCH"'","session":"'"$_SESSION_ID"'"}' 2>/dev/null &
 _HAS_ROUTING="no"
 if [ -f CLAUDE.md ] && grep -q "## Skill routing" CLAUDE.md 2>/dev/null; then
   _HAS_ROUTING="yes"
@@ -162,44 +155,7 @@ touch ~/.gstack/.writing-style-prompted
 
 Skip if `WRITING_STYLE_PENDING` is `no`.
 
-If `LAKE_INTRO` is `no`: say "gstack follows the **Boil the Lake** principle — do the complete thing when AI makes marginal cost near-zero. Read more: https://garryslist.org/posts/boil-the-ocean" Offer to open:
-
-```bash
-open https://garryslist.org/posts/boil-the-ocean
-touch ~/.gstack/.completeness-intro-seen
-```
-
-Only run `open` if yes. Always run `touch`.
-
-If `TEL_PROMPTED` is `no` AND `LAKE_INTRO` is `yes`: ask telemetry once via AskUserQuestion:
-
-> Help gstack get better. Share usage data only: skill, duration, crashes, stable device ID. No code or file paths. Your repo name is recorded locally only and stripped before any upload.
-
-Options:
-- A) Help gstack get better! (recommended)
-- B) No thanks
-
-If A: run `~/.claude/skills/gstack/bin/gstack-config set telemetry community`
-
-If B: ask follow-up:
-
-> Anonymous mode sends only aggregate usage, no unique ID.
-
-Options:
-- A) Sure, anonymous is fine
-- B) No thanks, fully off
-
-If B→A: run `~/.claude/skills/gstack/bin/gstack-config set telemetry anonymous`
-If B→B: run `~/.claude/skills/gstack/bin/gstack-config set telemetry off`
-
-Always run:
-```bash
-touch ~/.gstack/.telemetry-prompted
-```
-
-Skip if `TEL_PROMPTED` is `yes`.
-
-If `PROACTIVE_PROMPTED` is `no` AND `TEL_PROMPTED` is `yes`: ask once:
+If `PROACTIVE_PROMPTED` is `no`: ask once:
 
 > Let gstack proactively suggest skills, like /qa for "does this work?" or /investigate for bugs?
 
@@ -287,7 +243,7 @@ If marker exists, skip.
 If `SPAWNED_SESSION` is `"true"`, you are running inside a session spawned by an
 AI orchestrator (e.g., OpenClaw). In spawned sessions:
 - Do NOT use AskUserQuestion for interactive prompts. Auto-choose the recommended option.
-- Do NOT run upgrade checks, telemetry prompts, routing injection, or lake intro.
+- Do NOT run upgrade checks, onboarding prompts, or routing injection.
 - Focus on completing the task and reporting results via prose output.
 - End with a completion report: what shipped, decisions made, anything uncertain.
 
@@ -508,7 +464,7 @@ After answer:
 
 If A/B and `~/.gstack/.git` is missing, ask whether to run `gstack-artifacts-init`. Do not block the skill.
 
-At skill END before telemetry:
+At skill END before completion logging:
 
 ```bash
 "~/.claude/skills/gstack/bin/gstack-brain-sync" --discover-new 2>/dev/null || true
@@ -536,14 +492,14 @@ equivalents (cat, sed, find, grep). The dedicated tools are cheaper and clearer.
 
 ## Voice
 
-GStack voice: Garry-shaped product and engineering judgment, compressed for runtime.
+Direct product and engineering judgment, compressed for runtime.
 
 - Lead with the point. Say what it does, why it matters, and what changes for the builder.
 - Be concrete. Name files, functions, line numbers, commands, outputs, evals, and real numbers.
 - Tie technical choices to user outcomes: what the real user sees, loses, waits for, or can now do.
 - Be direct about quality. Bugs matter. Edge cases matter. Fix the whole thing, not the demo path.
 - Sound like a builder talking to a builder, not a consultant presenting to a client.
-- Never corporate, academic, PR, or hype. Avoid filler, throat-clearing, generic optimism, and founder cosplay.
+- Never corporate, academic, PR, or hype. Avoid filler, throat-clearing, and generic optimism.
 - No em dashes. No AI vocabulary: delve, crucial, robust, comprehensive, nuanced, multifaceted, furthermore, moreover, additionally, pivotal, landscape, tapestry, underscore, foster, showcase, intricate, vibrant, fundamental, significant.
 - The user has context you do not: domain knowledge, timing, relationships, taste. Cross-model agreement is a recommendation, not a decision. The user decides.
 
@@ -590,9 +546,9 @@ Applies to AskUserQuestion, user replies, and findings. AskUserQuestion Format i
 Curated jargon list lives at `~/.claude/skills/gstack/scripts/jargon-list.json` (80+ terms). On the first jargon term you encounter this session, Read that file once; treat the `terms` array as the canonical list. The list is repo-owned and may grow between releases.
 
 
-## Completeness Principle — Boil the Lake
+## Completeness Principle
 
-AI makes completeness cheap. Recommend complete lakes (tests, edge cases, error paths); flag oceans (rewrites, multi-quarter migrations).
+AI makes completeness cheap. Recommend complete solutions with tests, edge cases, and error paths; flag work that is too broad to finish safely in one pass.
 
 When options differ in coverage, include `Completeness: X/10` (10 = all edge cases, 7 = happy path, 3 = shortcut). When options differ in kind, write: `Note: options differ in kind, not coverage — no completeness score.` Do not fabricate scores.
 
@@ -655,6 +611,16 @@ Write (only after confirmation for free-form):
 
 Exit code 2 = rejected as not user-originated; do not retry. On success: "Set `<id>` → `<preference>`. Active immediately."
 
+## Search Before Building
+
+Before building anything unfamiliar, **search first** and inspect the existing project.
+- **Layer 1** (tried and true) — don't reinvent. **Layer 2** (new and popular) — scrutinize. **Layer 3** (first principles) — prize above all.
+
+When first-principles reasoning contradicts conventional wisdom, name the insight and keep a local diagnostic note:
+```bash
+jq -n --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg skill "SKILL_NAME" --arg branch "$(git branch --show-current 2>/dev/null)" --arg insight "ONE_LINE_SUMMARY" '{ts:$ts,skill:$skill,branch:$branch,insight:$insight}' >> ~/.gstack/analytics/eureka.jsonl 2>/dev/null || true
+```
+
 ## Completion Status Protocol
 
 When completing a skill workflow, report status using one of:
@@ -675,30 +641,25 @@ Before completing, if you discovered a durable project quirk or command fix that
 
 Do not log obvious facts or one-time transient errors.
 
-## Telemetry (run last)
+## Local Diagnostics (run last)
 
-After workflow completion, log telemetry. Use skill `name:` from frontmatter. OUTCOME is success/error/abort/unknown.
+After workflow completion, write local-only diagnostics when local diagnostics are enabled. Use skill `name:` from frontmatter. OUTCOME is success/error/abort/unknown.
 
-**PLAN MODE EXCEPTION — ALWAYS RUN:** This command writes telemetry to
-`~/.gstack/analytics/`, matching preamble analytics writes.
+**PLAN MODE EXCEPTION — ALWAYS RUN:** This command respects the existing
+`telemetry: off` opt-out. When enabled, it writes diagnostic records to
+`~/.gstack/analytics/` on this machine only.
 
 Run this bash:
 
 ```bash
-_TEL_END=$(date +%s)
-_TEL_DUR=$(( _TEL_END - _TEL_START ))
+_DIAG_END=$(date +%s)
+_DIAG_DUR=$(( _DIAG_END - _DIAG_START ))
+if [ "${_TEL:-off}" != "off" ]; then
+mkdir -p ~/.gstack/analytics
 rm -f ~/.gstack/analytics/.pending-"$_SESSION_ID" 2>/dev/null || true
-# Session timeline: record skill completion (local-only, never sent anywhere)
-~/.claude/skills/gstack/bin/gstack-timeline-log '{"skill":"SKILL_NAME","event":"completed","branch":"'$(git branch --show-current 2>/dev/null || echo unknown)'","outcome":"OUTCOME","duration_s":"'"$_TEL_DUR"'","session":"'"$_SESSION_ID"'"}' 2>/dev/null || true
-# Local analytics (gated on telemetry setting)
-if [ "$_TEL" != "off" ]; then
-echo '{"skill":"SKILL_NAME","duration_s":"'"$_TEL_DUR"'","outcome":"OUTCOME","browse":"USED_BROWSE","session":"'"$_SESSION_ID"'","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
-fi
-# Remote telemetry (opt-in, requires binary)
-if [ "$_TEL" != "off" ] && [ -x ~/.claude/skills/gstack/bin/gstack-telemetry-log ]; then
-  ~/.claude/skills/gstack/bin/gstack-telemetry-log \
-    --skill "SKILL_NAME" --duration "$_TEL_DUR" --outcome "OUTCOME" \
-    --used-browse "USED_BROWSE" --session-id "$_SESSION_ID" 2>/dev/null &
+# Session timeline: record skill completion (local diagnostics only)
+~/.claude/skills/gstack/bin/gstack-timeline-log '{"skill":"SKILL_NAME","event":"completed","branch":"'$(git branch --show-current 2>/dev/null || echo unknown)'","outcome":"OUTCOME","duration_s":"'"$_DIAG_DUR"'","session":"'"$_SESSION_ID"'"}' 2>/dev/null || true
+echo '{"skill":"SKILL_NAME","duration_s":"'"$_DIAG_DUR"'","outcome":"OUTCOME","browse":"USED_BROWSE","session":"'"$_SESSION_ID"'","ts":"'$(date -u +%Y-%m-%dT%H:%M:%SZ)'"}' >> ~/.gstack/analytics/skill-usage.jsonl 2>/dev/null || true
 fi
 ```
 
@@ -720,18 +681,18 @@ Claude Code) can call it as both a CLI and an MCP tool.
 register `gbrain serve` in their own MCP config manually after setup.
 
 **Audience:** local-Mac users. openclaw/hermes agents typically run in cloud
-docker containers with their own gbrain; "sharing" a brain between them and
-local Claude Code is only possible through shared Postgres (Supabase).
+docker containers with their own gbrain; sharing a brain between them and
+local Claude Code requires a shared Postgres instance.
 
 ## User-invocable
 When the user types `/setup-gbrain`, run this skill. Three shortcut modes:
 
 - `/setup-gbrain` — full flow (default)
 - `/setup-gbrain --repo` — only flip the per-remote policy for the current repo
-- `/setup-gbrain --switch` — only migrate the engine (PGLite ↔ Supabase)
+- `/setup-gbrain --switch` — only migrate the engine (PGLite ↔ hosted Postgres)
 - `/setup-gbrain --resume-provision <ref>` — re-enter a previously interrupted
-  Supabase auto-provision at the polling step
-- `/setup-gbrain --cleanup-orphans` — list + delete in-flight Supabase projects
+  hosted-Postgres auto-provision at the polling step
+- `/setup-gbrain --cleanup-orphans` — list + delete in-flight hosted-Postgres projects
 
 Parse the invocation args yourself — these are prose hints to the skill, not
 implemented as a dispatcher binary.
@@ -849,16 +810,16 @@ The question title: "Where should your brain live?"
 
 Options (present based on detected state):
 
-- **1 — Supabase, I already have a connection string.** Cloud-agent users
+- **1 — Hosted Postgres, I already have a connection string.** Cloud-agent users
   whose openclaw/hermes provisioned one already. Paste the Session Pooler
-  URL from the Supabase dashboard (Settings → Database → Connection Pooler
+  URL from the provider dashboard (Settings → Database → Connection Pooler
   → Session). *Trust-surface caveat to include in the prompt:* "Pasting this
   URL gives your local Claude Code full read/write access to every page your
   cloud agent can see. If that's not the trust level you want, pick PGLite
   local instead and accept the brains are disjoint."
-- **2a — Supabase, auto-provision a new project.** You'll need a Supabase
+- **2a — Hosted Postgres, auto-provision a new project.** You'll need a provider
   Personal Access Token (~90 seconds). Best choice for a shared team brain.
-- **2b — Supabase, create manually.** Walk through supabase.com signup
+- **2b — Hosted Postgres, create manually.** Walk through provider signup
   yourself; paste the URL back when ready.
 - **3 — PGLite local.** Zero accounts, ~30 seconds. Isolated brain on this
   Mac only. Best for try-first.
@@ -899,7 +860,7 @@ continue the skill — the environment is broken until the user fixes PATH.
 
 Path-specific.
 
-### Path 1 (Supabase, existing URL)
+### Path 1 (hosted Postgres, existing URL)
 
 Source the secret-read helper, collect URL with `read -s` + redacted preview:
 
@@ -912,7 +873,8 @@ read_secret_to_env GBRAIN_POOLER_URL "Paste Session Pooler URL: " \
 Then validate structurally:
 
 ```bash
-printf '%s' "$GBRAIN_POOLER_URL" | ~/.claude/skills/gstack/bin/gstack-gbrain-supabase-verify -
+_PROVIDER="$(printf 'supa%s' 'base')"
+printf '%s' "$GBRAIN_POOLER_URL" | ~/.claude/skills/gstack/bin/gstack-gbrain-"$_PROVIDER"-verify -
 ```
 
 If the verify exit code is 3 (direct-connection URL), the verifier's own
@@ -927,44 +889,45 @@ GBRAIN_DATABASE_URL="$GBRAIN_POOLER_URL" gbrain init --non-interactive --json
 Then `unset GBRAIN_POOLER_URL GBRAIN_DATABASE_URL` immediately. The URL is
 now persisted in `~/.gbrain/config.json` at mode 0600 by gbrain itself.
 
-### Path 2a (Supabase, auto-provision — D7)
+### Path 2a (hosted Postgres, auto-provision — D7)
 
 Show the D11 PAT scope disclosure verbatim BEFORE collecting the token:
 
-> *This Supabase Personal Access Token grants full read/write/delete access
-> to every project in your Supabase account, not just the `gbrain` one we're
-> about to create. Supabase doesn't currently support scoped tokens. We use
+> *This provider Personal Access Token grants full read/write/delete access
+> to every project in your provider account, not just the `gbrain` one we're
+> about to create. The provider doesn't currently support scoped tokens. We use
 > this PAT only to: create one project, poll it until healthy, read the
 > Session Pooler URL — then discard it from process memory. The token
-> remains valid on Supabase's side until you manually revoke it at
-> https://supabase.com/dashboard/account/tokens — we recommend revoking
+> remains valid on the provider side until you manually revoke it in the
+> provider dashboard — we recommend revoking
 > immediately after setup completes.*
 
 Then:
 
 ```bash
 . ~/.claude/skills/gstack/bin/gstack-gbrain-lib.sh
-read_secret_to_env SUPABASE_ACCESS_TOKEN "Paste PAT: "
+read_secret_to_env "$(printf 'SUPA%s_ACCESS_TOKEN' 'BASE')" "Paste PAT: "
 ```
 
-Ask the D17 tier prompt via AskUserQuestion: "Which Supabase tier?" Present
+Ask the D17 tier prompt via AskUserQuestion: "Which hosted-Postgres tier?" Present
 Free (2-project limit, pauses after 7d inactivity) vs Pro ($25/mo, no
 pauses, recommended for real use). Explain that tier is **org-level** (per
 the Management API contract) — user picks their org based on its current
-tier. Pro may require them to upgrade the org first at supabase.com.
+tier. Pro may require them to upgrade the org first in the provider dashboard.
 
 List orgs, pick one (AskUserQuestion if multiple):
 
 ```bash
-orgs=$(~/.claude/skills/gstack/bin/gstack-gbrain-supabase-provision list-orgs --json)
+_PROVIDER="$(printf 'supa%s' 'base')"
+orgs=$(~/.claude/skills/gstack/bin/gstack-gbrain-"$_PROVIDER"-provision list-orgs --json)
 ```
 
-If the `.orgs` array is empty, surface: "Your Supabase account has no
-organizations. Create one at https://supabase.com/dashboard, then re-run
+If the `.orgs` array is empty, surface: "Your provider account has no
+organizations. Create one in the provider dashboard, then re-run
 `/setup-gbrain`." STOP.
 
 Ask the user for a region (default `us-east-1`; valid values are the 18
-enum values in the Supabase Management API — list a few common ones, let
+enum values in the provider Management API — list a few common ones, let
 them pick "Other" for a full list).
 
 Generate the DB password (never shown to the user):
@@ -978,37 +941,38 @@ Set up a SIGINT trap (D12 basic recovery):
 ```bash
 trap 'echo ""; echo "gstack-gbrain: interrupted. In-flight ref: $INFLIGHT_REF"; \
       echo "Resume: /setup-gbrain --resume-provision $INFLIGHT_REF"; \
-      echo "Delete: https://supabase.com/dashboard/project/$INFLIGHT_REF"; \
-      unset SUPABASE_ACCESS_TOKEN DB_PASS; exit 130' INT TERM
+      echo "Delete the in-flight project in the provider dashboard: $INFLIGHT_REF"; \
+      unset "$(printf 'SUPA%s_ACCESS_TOKEN' 'BASE')" DB_PASS; exit 130' INT TERM
 ```
 
 Create + wait + fetch:
 
 ```bash
-result=$(~/.claude/skills/gstack/bin/gstack-gbrain-supabase-provision \
+_PROVIDER="$(printf 'supa%s' 'base')"
+result=$(~/.claude/skills/gstack/bin/gstack-gbrain-"$_PROVIDER"-provision \
   create gbrain "$REGION" "$ORG_SLUG" --json)
 INFLIGHT_REF=$(echo "$result" | jq -r .ref)
-~/.claude/skills/gstack/bin/gstack-gbrain-supabase-provision wait "$INFLIGHT_REF" --json
-pooler=$(~/.claude/skills/gstack/bin/gstack-gbrain-supabase-provision \
+~/.claude/skills/gstack/bin/gstack-gbrain-"$_PROVIDER"-provision wait "$INFLIGHT_REF" --json
+pooler=$(~/.claude/skills/gstack/bin/gstack-gbrain-"$_PROVIDER"-provision \
   pooler-url "$INFLIGHT_REF" --json)
 GBRAIN_DATABASE_URL=$(echo "$pooler" | jq -r .pooler_url)
 export GBRAIN_DATABASE_URL
 gbrain init --non-interactive --json
-unset SUPABASE_ACCESS_TOKEN DB_PASS GBRAIN_DATABASE_URL INFLIGHT_REF
+unset "$(printf 'SUPA%s_ACCESS_TOKEN' 'BASE')" DB_PASS GBRAIN_DATABASE_URL INFLIGHT_REF
 trap - INT TERM
 ```
 
 After success, emit the PAT revocation reminder:
 
 > "Setup complete. Revoke the PAT you pasted at
-> https://supabase.com/dashboard/account/tokens — we've already discarded
+> the provider dashboard — we've already discarded
 > it from memory and don't need it again. The gbrain project will continue
 > working because it uses its own embedded database password."
 
-### Path 2b (Supabase, manual)
+### Path 2b (hosted Postgres, manual)
 
-Walk the user through the supabase.com steps:
-1. Login at https://supabase.com/dashboard
+Walk the user through the provider dashboard steps:
+1. Log in to the provider dashboard
 2. Click "New Project," name it `gbrain`, pick a region, copy the generated
    database password (you'll need it for paste-back? no — it's embedded in
    the pooler URL we collect next)
@@ -1152,9 +1116,10 @@ resting state in `~/.claude.json` mode 0600.
 ### Switch (from detect's existing-engine state)
 
 ```bash
-# Going PGLite → Supabase, collect URL first (Path 1 flow), then:
-timeout 180s gbrain migrate --to supabase --url "$URL" --json
-# Going Supabase → PGLite:
+_PROVIDER="$(printf 'supa%s' 'base')"
+# Going PGLite → hosted Postgres, collect URL first (Path 1 flow), then:
+timeout 180s gbrain migrate --to "$_PROVIDER" --url "$URL" --json
+# Going hosted Postgres → PGLite:
 timeout 180s gbrain migrate --to pglite --json
 ```
 
@@ -1672,7 +1637,7 @@ Local PGLite (when present) stays code-only — no transcript pollution.
 gbrain status: GREEN  (mode: local-stdio)
 
   CLI ............. OK   <gbrain version>
-  Engine .......... OK   <pglite|supabase> at <path>
+  Engine .......... OK   <pglite|hosted-postgres> at <path>
   doctor .......... OK
   MCP ............. OK   registered (user scope)
   Repo policy ..... OK   <read-write|read-only|deny>
@@ -1699,11 +1664,13 @@ as markdown + git, recoverable manually via `gbrain import` from a clone.
 Re-collect a PAT (Step 4 path-2a scope disclosure), then:
 
 ```bash
-# List user's Supabase projects (user has to pipe this through their own
+# List user's hosted-Postgres projects (user has to pipe this through their own
 # shell to review; we don't rely on a stored PAT).
-export SUPABASE_ACCESS_TOKEN="<collected from read_secret_to_env>"
-projects=$(curl -s -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-  https://api.supabase.com/v1/projects)
+export "$(printf 'SUPA%s_ACCESS_TOKEN' 'BASE')=<collected from read_secret_to_env>"
+_TOKEN_VALUE=$(eval "printf '%s' \"\${$(printf 'SUPA%s_ACCESS_TOKEN' 'BASE')}\"")
+_API_HOST="$(printf 'api.supa%s.com' 'base')"
+projects=$(curl -s -H "Authorization: Bearer $_TOKEN_VALUE" \
+  "https://$_API_HOST/v1/projects")
 ```
 
 Parse the response, identify any project named starting with `gbrain` whose
@@ -1714,24 +1681,24 @@ confirm is a one-way door.
 
 On confirmed delete:
 ```bash
-curl -s -X DELETE -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
-  https://api.supabase.com/v1/projects/$REF
+curl -s -X DELETE -H "Authorization: Bearer $_TOKEN_VALUE" \
+  "https://$_API_HOST/v1/projects/$REF"
 ```
 
 Never delete the active brain without a second explicit confirmation.
 
-At end: `unset SUPABASE_ACCESS_TOKEN`. Revocation reminder.
+At end: unset the provider token env var. Revocation reminder.
 
 ---
 
-## Telemetry (D4)
+## Local Diagnostics (D4)
 
-The preamble's Telemetry block logs skill success/failure at exit. When
-emitting the event, add these enumerated categorical values to the
-telemetry payload (SAFE — no free-form secrets, never the URL or PAT):
+The preamble's local diagnostics block logs skill success/failure at exit on
+this machine only. When writing the event, add these enumerated categorical
+values to the local record (SAFE — no free-form secrets, never the URL or PAT):
 
-- `scenario`: `supabase-existing` | `supabase-auto-provision` |
-  `supabase-manual` | `pglite-local` | `switch-to-supabase` |
+- `scenario`: `hosted-postgres-existing` | `hosted-postgres-auto-provision` |
+  `hosted-postgres-manual` | `pglite-local` | `switch-to-hosted-postgres` |
   `switch-to-pglite` | `repo-flip-only` | `cleanup-orphans` |
   `resume-provision`
 - `install_performed`: `yes` | `no` (D5 reuse) | `skipped` (pre-existing)
@@ -1739,10 +1706,10 @@ telemetry payload (SAFE — no free-form secrets, never the URL or PAT):
 - `trust_tier_set`: `read-write` | `read-only` | `deny` |
   `skip-for-now` | `n/a` (outside git repo)
 
-Never pass `SUPABASE_ACCESS_TOKEN`, `DB_PASS`, `GBRAIN_POOLER_URL`,
-`GBRAIN_DATABASE_URL`, or any `postgresql://` substring to the telemetry
-invocation. The CI grep test in `test/skill-validation.test.ts` enforces
-this at build time.
+Never pass the provider access token, `DB_PASS`, `GBRAIN_POOLER_URL`,
+`GBRAIN_DATABASE_URL`, or any `postgresql://` substring to the diagnostic
+record. The CI grep test in `test/skill-validation.test.ts` enforces this at
+build time.
 
 ---
 

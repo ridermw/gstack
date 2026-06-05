@@ -79,6 +79,35 @@ function extractPreambleBeforeWorkflow(content: string, workflowMarkers: string[
   return content.slice(0, Math.min(...markerIndexes));
 }
 
+function extractSharedMethodologyRegion(content: string): string {
+  const starts = [
+    content.indexOf('## Voice'),
+    content.indexOf('## AskUserQuestion Format'),
+    content.indexOf('## Completeness Principle'),
+  ].filter(index => index >= 0);
+  if (starts.length === 0) return '';
+
+  const start = Math.min(...starts);
+  const rest = content.slice(start);
+  let inFence = false;
+  let offset = 0;
+  for (const line of rest.split('\n')) {
+    if (line.startsWith('```')) inFence = !inFence;
+    if (!inFence && line.startsWith('# ')) return rest.slice(0, offset);
+    offset += line.length + 1;
+  }
+  return rest;
+}
+
+function readPreambleResolverSources(): string {
+  const preambleDir = path.join(ROOT, 'scripts/resolvers/preamble');
+  const submoduleFiles = fs.existsSync(preambleDir)
+    ? fs.readdirSync(preambleDir).filter(f => f.endsWith('.ts')).map(f => fs.readFileSync(path.join(preambleDir, f), 'utf-8'))
+    : [];
+  const rootPreamble = fs.readFileSync(path.join(ROOT, 'scripts/resolvers/preamble.ts'), 'utf-8');
+  return [rootPreamble, ...submoduleFiles].join('\n');
+}
+
 function isRepoRootSymlink(candidateDir: string): boolean {
   try {
     return fs.realpathSync(candidateDir) === fs.realpathSync(ROOT);
@@ -105,6 +134,169 @@ const ALL_SKILLS = (() => {
 
 const CLAUDE_SKIPPED_SKILL_DIRS = new Set(['claude']);
 const CLAUDE_GENERATED_SKILLS = ALL_SKILLS.filter(skill => !CLAUDE_SKIPPED_SKILL_DIRS.has(skill.dir));
+
+const ENTERPRISE_RISK_PATTERNS = [
+  /phone[- ]home/i,
+  /phoning home/i,
+  /stable device ID/i,
+  /Supabase/i,
+  /analytics upload/i,
+  /usage upload/i,
+  /usage data.{0,80}(share|upload|sync|report)/i,
+  /(share|upload|sync|report).{0,80}usage data/i,
+  /gstack-telemetry-log/i,
+  /garryslist\.org\/posts\/boil-the-ocean/i,
+  /Boil the Lake/i,
+  /boil-the-ocean/i,
+  /Garry-shaped/i,
+  /founder cosplay/i,
+];
+
+function getGeneratedMarkdownOutputs(): Array<{ name: string; content: string }> {
+  const outputs: Array<{ name: string; content: string }> = [];
+  const rootSkill = path.join(ROOT, 'SKILL.md');
+  if (fs.existsSync(rootSkill)) {
+    outputs.push({ name: 'SKILL.md', content: fs.readFileSync(rootSkill, 'utf-8') });
+  }
+
+  for (const entry of fs.readdirSync(ROOT, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+    if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+
+    const skillPath = path.join(ROOT, entry.name, 'SKILL.md');
+    if (fs.existsSync(skillPath)) {
+      outputs.push({ name: `${entry.name}/SKILL.md`, content: fs.readFileSync(skillPath, 'utf-8') });
+    }
+
+    const sectionsDir = path.join(ROOT, entry.name, 'sections');
+    if (!fs.existsSync(sectionsDir)) continue;
+    for (const section of fs.readdirSync(sectionsDir).sort()) {
+      if (!section.endsWith('.md')) continue;
+      const sectionPath = path.join(sectionsDir, section);
+      outputs.push({ name: `${entry.name}/sections/${section}`, content: fs.readFileSync(sectionPath, 'utf-8') });
+    }
+  }
+
+  for (const hiddenHostOutput of ['.agents/skills', '.copilot-plugin']) {
+    const hostRoot = path.join(ROOT, hiddenHostOutput);
+    if (!fs.existsSync(hostRoot)) continue;
+
+    const visit = (dir: string): void => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) {
+        const abs = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          visit(abs);
+        } else if (entry.isFile() && entry.name === 'SKILL.md') {
+          const rel = path.relative(ROOT, abs);
+          outputs.push({ name: rel, content: fs.readFileSync(abs, 'utf-8') });
+        }
+      }
+    };
+
+    visit(hostRoot);
+  }
+
+  return outputs;
+}
+
+function runCopilotDryRun(): string {
+  const result = Bun.spawnSync(['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', 'copilot', '--dry-run'], {
+    cwd: ROOT,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  return result.stdout.toString() + result.stderr.toString();
+}
+
+function runCopilotGenerate(): { exitCode: number | null; output: string } {
+  const result = Bun.spawnSync(['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', 'copilot'], {
+    cwd: ROOT,
+    stdout: 'pipe',
+    stderr: 'pipe',
+  });
+  return {
+    exitCode: result.exitCode,
+    output: result.stdout.toString() + result.stderr.toString(),
+  };
+}
+
+type DirSnapshotEntry =
+  | { kind: 'dir'; rel: string }
+  | { kind: 'file'; rel: string; data: Buffer }
+  | { kind: 'symlink'; rel: string; target: string };
+
+function snapshotDir(dir: string): DirSnapshotEntry[] | null {
+  if (!fs.existsSync(dir)) return null;
+  const entries: DirSnapshotEntry[] = [];
+
+  function walk(abs: string, rel: string): void {
+    const stat = fs.lstatSync(abs);
+    if (stat.isSymbolicLink()) {
+      entries.push({ kind: 'symlink', rel, target: fs.readlinkSync(abs) });
+      return;
+    }
+    if (stat.isDirectory()) {
+      entries.push({ kind: 'dir', rel });
+      for (const name of fs.readdirSync(abs).sort()) {
+        walk(path.join(abs, name), path.join(rel, name));
+      }
+      return;
+    }
+    if (stat.isFile()) {
+      entries.push({ kind: 'file', rel, data: fs.readFileSync(abs) });
+    }
+  }
+
+  walk(dir, '');
+  return entries;
+}
+
+function restoreDir(dir: string, snapshot: DirSnapshotEntry[] | null): void {
+  fs.rmSync(dir, { recursive: true, force: true });
+  if (!snapshot) return;
+  for (const entry of snapshot) {
+    const abs = path.join(dir, entry.rel);
+    if (entry.kind === 'dir') {
+      fs.mkdirSync(abs, { recursive: true });
+    } else if (entry.kind === 'file') {
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.writeFileSync(abs, entry.data);
+    } else {
+      fs.mkdirSync(path.dirname(abs), { recursive: true });
+      fs.symlinkSync(entry.target, abs);
+    }
+  }
+}
+
+function withMaterializedHiddenHostOutputs<T>(fn: () => T): T {
+  const hiddenOutputDirs = [
+    path.join(ROOT, '.agents', 'skills'),
+    path.join(ROOT, '.copilot-plugin'),
+  ];
+  const snapshots = hiddenOutputDirs.map(dir => ({ dir, snapshot: snapshotDir(dir) }));
+
+  try {
+    for (const dir of hiddenOutputDirs) {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+
+    const result = Bun.spawnSync(['bun', 'run', 'scripts/gen-skill-docs.ts', '--host', 'codex'], {
+      cwd: ROOT,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+    const output = result.stdout.toString() + result.stderr.toString();
+    expect(result.exitCode, output).toBe(0);
+
+    const agentsSkill = path.join(ROOT, '.agents', 'skills', 'gstack', 'SKILL.md');
+    expect(fs.existsSync(agentsSkill)).toBe(true);
+
+    return fn();
+  } finally {
+    for (const { dir, snapshot } of snapshots.reverse()) {
+      restoreDir(dir, snapshot);
+    }
+  }
+}
 
 describe('gen-skill-docs', () => {
   test('generated SKILL.md contains all command categories', () => {
@@ -253,6 +445,62 @@ describe('gen-skill-docs', () => {
     expect(violations).toEqual([]);
   });
 
+  test('Copilot generator emits required plugin.json manifest in .copilot-plugin', () => {
+    const output = runCopilotDryRun();
+
+    expect(output).toMatch(/(?:FRESH|STALE): \.copilot-plugin\/plugin\.json/);
+  });
+
+  test('Copilot generator writes plugin.json with the required JSON fields', () => {
+    const pluginDir = path.join(ROOT, '.copilot-plugin');
+    const before = snapshotDir(pluginDir);
+    try {
+      const result = runCopilotGenerate();
+      expect(result.exitCode, result.output).toBe(0);
+
+      const manifestPath = path.join(pluginDir, 'plugin.json');
+      expect(fs.existsSync(manifestPath)).toBe(true);
+      expect(JSON.parse(fs.readFileSync(manifestPath, 'utf-8'))).toMatchObject({
+        name: 'gstack',
+        description: 'gstack skills for GitHub Copilot CLI',
+        version: fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf-8').trim(),
+        skills: 'skills/',
+      });
+    } finally {
+      restoreDir(pluginDir, before);
+    }
+  });
+
+  test('Copilot generator routes all emitted skills under .copilot-plugin/skills/<name>/SKILL.md', () => {
+    const output = runCopilotDryRun();
+    const emittedSkillPaths = output
+      .split('\n')
+      .map(line => line.match(/^(?:FRESH|STALE): (.*SKILL\.md)$/)?.[1])
+      .filter((p): p is string => Boolean(p));
+
+    expect(emittedSkillPaths.length).toBeGreaterThan(5);
+    for (const emittedPath of emittedSkillPaths) {
+      expect(emittedPath).toMatch(/^\.copilot-plugin\/skills\/[^/]+\/SKILL\.md$/);
+      expect(emittedPath).not.toBe('.copilot-plugin/SKILL.md');
+    }
+  });
+
+  test('Copilot generated preambles do not treat the plugin skills directory as a runtime root', () => {
+    const pluginDir = path.join(ROOT, '.copilot-plugin');
+    const before = snapshotDir(pluginDir);
+    try {
+      const result = runCopilotGenerate();
+      expect(result.exitCode, result.output).toBe(0);
+
+      const content = fs.readFileSync(path.join(pluginDir, 'skills', 'gstack-review', 'SKILL.md'), 'utf-8');
+      expect(content).toContain('GSTACK_ROOT="$HOME/.copilot/plugins/gstack"');
+      expect(content).toContain('[ -x "$_ROOT/.copilot-plugin/skills/bin/gstack-config" ]');
+      expect(content).not.toContain('[ -d "$_ROOT/.copilot-plugin/skills" ] && GSTACK_ROOT="$_ROOT/.copilot-plugin/skills"');
+    } finally {
+      restoreDir(pluginDir, before);
+    }
+  });
+
   test('package.json version matches VERSION file', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
     const version = fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf-8').trim();
@@ -339,10 +587,16 @@ describe('gen-skill-docs', () => {
     expect(content).not.toContain('## Completeness Principle');
   });
 
-  test('generated SKILL.md contains telemetry line', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
-    expect(content).toContain('skill-usage.jsonl');
-    expect(content).toContain('~/.gstack/analytics');
+  test('local-only diagnostic wording is allowed by enterprise-risk patterns', () => {
+    const localOnlyDiagnostics = [
+      'Write local JSONL diagnostics to ~/.gstack/analytics/skill-usage.jsonl.',
+      'Keep troubleshooting records on this machine only.',
+      'No network transmission, device identifier, or enterprise-repo dataset sharing.',
+    ].join('\n');
+
+    for (const pattern of ENTERPRISE_RISK_PATTERNS) {
+      expect(localOnlyDiagnostics).not.toMatch(pattern);
+    }
   });
 
   test('plan-review generated preambles stay under the Option A budget', () => {
@@ -448,20 +702,6 @@ describe('gen-skill-docs', () => {
           }
         }
       }
-    }
-  });
-
-  test('preamble-using skills have correct skill name in telemetry', () => {
-    const PREAMBLE_SKILLS = [
-      { dir: '.', name: 'gstack' },
-      { dir: 'ship', name: 'ship' },
-      { dir: 'review', name: 'review' },
-      { dir: 'qa', name: 'qa' },
-      { dir: 'retro', name: 'retro' },
-    ];
-    for (const skill of PREAMBLE_SKILLS) {
-      const content = fs.readFileSync(path.join(ROOT, skill.dir, 'SKILL.md'), 'utf-8');
-      expect(content).toContain(`"skill":"${skill.name}"`);
     }
   });
 
@@ -1163,13 +1403,11 @@ describe('make-pdf setup ordering', () => {
     const preambleIdx = content.indexOf('## Preamble (run first)');
     const setupIdx = content.indexOf('## MAKE-PDF SETUP');
     const planModeIdx = content.indexOf('## Plan Mode Safe Operations');
-    const telemetryIdx = content.indexOf('## Telemetry (run last)');
     const workflowIdx = content.indexOf('# make-pdf: publication-quality PDFs from markdown');
 
     expect(preambleIdx).toBeGreaterThanOrEqual(0);
     expect(setupIdx).toBeGreaterThan(preambleIdx);
     expect(setupIdx).toBeLessThan(planModeIdx);
-    expect(setupIdx).toBeLessThan(telemetryIdx);
     expect(setupIdx).toBeLessThan(workflowIdx);
     expect(content.match(/^## MAKE-PDF SETUP/gm)?.length ?? 0).toBe(1);
   });
@@ -1421,7 +1659,6 @@ describe('INVOKE_SKILL resolver', () => {
 
   test('INVOKE_SKILL output includes default skip list', () => {
     expect(ceoContent).toContain('Preamble (run first)');
-    expect(ceoContent).toContain('Telemetry (run last)');
     expect(ceoContent).toContain('AskUserQuestion Format');
   });
 
@@ -2343,9 +2580,9 @@ describe('setup script validation', () => {
     expect(claudeSection).toContain('link_claude_root_skill_alias "$SOURCE_GSTACK_DIR" "$INSTALL_SKILLS_DIR"');
   });
 
-  test('setup supports --host auto|claude|codex|kiro|opencode', () => {
+  test('setup supports --host auto|claude|codex|kiro|opencode|copilot', () => {
     expect(setupContent).toContain('--host');
-    expect(setupContent).toContain('claude|codex|kiro|factory|opencode|auto');
+    expect(setupContent).toContain('claude|codex|kiro|factory|opencode|copilot|auto');
   });
 
   test('auto mode detects claude, codex, kiro, and opencode binaries', () => {
@@ -2545,52 +2782,71 @@ describe('discover-skills hidden directory filtering', () => {
   });
 });
 
-describe('telemetry', () => {
-  test('generated SKILL.md contains telemetry start block', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
-    expect(content).toContain('_TEL_START');
-    expect(content).toContain('_SESSION_ID');
-    expect(content).toContain('TELEMETRY:');
-    expect(content).toContain('TEL_PROMPTED:');
-    expect(content).toContain('gstack-config get telemetry');
-  });
+describe('enterprise generated-output safety', () => {
+  test('generated outputs ban off-machine telemetry and enterprise-risk speech', () => {
+    const outputs = withMaterializedHiddenHostOutputs(() => getGeneratedMarkdownOutputs());
+    expect(outputs.some(output => output.name.startsWith('.agents/skills/'))).toBe(true);
 
-  test('generated SKILL.md contains telemetry opt-in prompt', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
-    expect(content).toContain('.telemetry-prompted');
-    expect(content).toContain('Help gstack get better');
-    expect(content).toContain('gstack-config set telemetry community');
-    expect(content).toContain('gstack-config set telemetry anonymous');
-    expect(content).toContain('gstack-config set telemetry off');
-  });
-
-  test('generated SKILL.md contains telemetry epilogue', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
-    expect(content).toContain('Telemetry (run last)');
-    expect(content).toContain('gstack-telemetry-log');
-    expect(content).toContain('_TEL_END');
-    expect(content).toContain('_TEL_DUR');
-    expect(content).toContain('SKILL_NAME');
-    expect(content).toContain('OUTCOME');
-    expect(content).toContain('PLAN MODE EXCEPTION');
-  });
-
-  test('generated SKILL.md contains pending marker handling', () => {
-    const content = fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8');
-    expect(content).toContain('.pending');
-    expect(content).toContain('_pending_finalize');
-  });
-
-  test('telemetry blocks appear in all skill files that use PREAMBLE', () => {
-    const skills = ['qa', 'ship', 'review', 'plan-ceo-review', 'plan-eng-review', 'retro'];
-    for (const skill of skills) {
-      const skillPath = path.join(ROOT, skill, 'SKILL.md');
-      if (fs.existsSync(skillPath)) {
-        const content = fs.readFileSync(skillPath, 'utf-8');
-        expect(content).toContain('_TEL_START');
-        expect(content).toContain('Telemetry (run last)');
+    const violations: string[] = [];
+    for (const { name, content } of outputs) {
+      for (const pattern of ENTERPRISE_RISK_PATTERNS) {
+        const match = content.match(pattern);
+        if (match) {
+          violations.push(`${name}: ${pattern} matched "${match[0]}"`);
+        }
       }
     }
+
+    expect(violations).toEqual([]);
+  });
+
+  test('tier 2+/3+ generated skills preserve enterprise-neutral methodology guardrails', () => {
+    const methodologySkills = CLAUDE_GENERATED_SKILLS
+      .map(skill => {
+        const tmplPath = skill.dir === '.'
+          ? path.join(ROOT, 'SKILL.md.tmpl')
+          : path.join(ROOT, skill.dir, 'SKILL.md.tmpl');
+        const tierMatch = fs.readFileSync(tmplPath, 'utf-8').match(/^preamble-tier:\s*(\d+)/m);
+        return { ...skill, tier: tierMatch ? Number(tierMatch[1]) : 4 };
+      })
+      .filter(skill => skill.tier >= 2)
+      .map(skill => ({
+        name: `${skill.dir}/SKILL.md`,
+        content: extractSharedMethodologyRegion(
+          skill.dir === '.'
+            ? fs.readFileSync(path.join(ROOT, 'SKILL.md'), 'utf-8')
+            : readSkillUnion(skill.dir)
+        ),
+      }));
+
+    expect(methodologySkills.length).toBeGreaterThan(5);
+
+    const missing: string[] = [];
+    const reviewGuardrailPattern = /\breview\b[\s\S]{0,120}(?:before|after|implementation|report|readiness|findings|changes\s+(?:before|after|in the diff))|(?:before|after|implementation|report|readiness|findings|changes\s+(?:before|after|in the diff))[\s\S]{0,120}\breview\b/i;
+    expect('the reviewer changes their mind').not.toMatch(reviewGuardrailPattern);
+    expect('this is a code review note about unrelated changes').not.toMatch(reviewGuardrailPattern);
+
+    const required = [
+      { label: 'completeness', pattern: /complete solutions|complete[\s\S]{0,120}edge cases|error paths/i },
+      { label: 'search-first', pattern: /search first|Search Before Building|inspect existing/i },
+      { label: 'review guardrail', pattern: reviewGuardrailPattern },
+      { label: 'test guardrail', pattern: /tests?[\s\S]{0,120}(pass|fail|run|coverage|commands?)|run[\s\S]{0,80}tests?/i },
+      {
+        label: 'verification guardrail',
+        pattern: /(?:verify|verification|verified)[\s\S]{0,120}(?:behavior|outcome|result|works|bug fixes|plan file|report|app|health)|(?:behavior|outcome|result|works|bug fixes|plan file|report|app|health)[\s\S]{0,120}(?:verify|verification|verified)/i,
+      },
+      { label: 'user-decision', pattern: /The user decides|recommendation, not a decision/i },
+    ];
+
+    for (const { name, content } of methodologySkills) {
+      for (const { label, pattern } of required) {
+        if (!pattern.test(content)) {
+          missing.push(`${name}: missing ${label} (${pattern})`);
+        }
+      }
+    }
+
+    expect(missing).toEqual([]);
   });
 });
 
@@ -2667,14 +2923,16 @@ describe('community fixes wave', () => {
     }
   });
 
-  // #467 — Telemetry: preamble JSONL writes are gated by telemetry setting
-  test('preamble JSONL writes are inside telemetry conditional', () => {
-    const preamble = fs.readFileSync(path.join(ROOT, 'scripts/resolvers/preamble.ts'), 'utf-8');
-    // Find all skill-usage.jsonl write lines
+  // #467 — Local diagnostics: JSONL writes and timeline calls respect telemetry: off.
+  test('preamble JSONL writes and timeline calls are inside local diagnostics opt-out conditional', () => {
+    const preamble = readPreambleResolverSources();
+    // Find all local analytics JSONL writes and timeline diagnostic calls.
     const lines = preamble.split('\n');
     for (let i = 0; i < lines.length; i++) {
-      if (lines[i].includes('skill-usage.jsonl') && lines[i].includes('>>')) {
-        // Look backwards for a telemetry conditional within 5 lines
+      const isLocalAnalyticsWrite = lines[i].includes('skill-usage.jsonl') && lines[i].includes('>>');
+      const isTimelineDiagnostic = lines[i].includes('gstack-timeline-log');
+      if (isLocalAnalyticsWrite || isTimelineDiagnostic) {
+        // Look backwards for a telemetry/local-diagnostics conditional within 5 lines
         let foundConditional = false;
         for (let j = i - 1; j >= Math.max(0, i - 5); j--) {
           if (lines[j].includes('_TEL') && lines[j].includes('off')) {

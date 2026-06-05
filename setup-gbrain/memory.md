@@ -73,7 +73,7 @@ the helper warns once and disables secret scanning for that run.
 
 Storage tier depends on your gbrain engine (set during `/setup-gbrain`):
 
-- **Supabase configured:** code + transcripts go to Supabase Storage
+- **Hosted Postgres configured:** code + transcripts go to provider storage
   (multi-Mac native). Curated memory (eureka/learnings/etc.) goes to the
   brain-linked git repo via `gstack-brain-sync`.
 - **Local PGLite only:** everything stays on this Mac. Curated memory
@@ -175,7 +175,7 @@ Common cases:
 - Every gbrain put/delete is logged to `~/.gstack/.gbrain-errors.jsonl`
   with `{ts, op, duration_ms, outcome}` for forensic tracing.
 - `~/.gstack/.gbrain-engine-cache.json` shows which storage tier is
-  active (PGLite vs Supabase).
+  active (PGLite vs hosted Postgres).
 - Brain-sync git history shows every curated artifact push with the
   user's git identity.
 

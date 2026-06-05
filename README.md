@@ -114,6 +114,7 @@ Or target a specific agent with `./setup --host <name>`:
 | Agent | Flag | Skills install to |
 |-------|------|-------------------|
 | OpenAI Codex CLI | `--host codex` | `~/.codex/skills/gstack-*/` |
+| GitHub Copilot CLI | `--host copilot` | persistent `gstack` plugin from `.copilot-plugin/` |
 | OpenCode | `--host opencode` | `~/.config/opencode/skills/gstack-*/` |
 | Cursor | `--host cursor` | `~/.cursor/skills/gstack-*/` |
 | Factory Droid | `--host factory` | `~/.factory/skills/gstack-*/` |
@@ -121,6 +122,8 @@ Or target a specific agent with `./setup --host <name>`:
 | Kiro | `--host kiro` | `~/.kiro/skills/gstack-*/` |
 | Hermes | `--host hermes` | `~/.hermes/skills/gstack-*/` |
 | GBrain (mod) | `--host gbrain` | `~/.gbrain/skills/gstack-*/` |
+
+**Copilot CLI note:** `./setup --host copilot` is the persistent install path. It generates `.copilot-plugin/` and runs `copilot plugin install` so gstack is available from any local Copilot CLI session. `copilot --plugin-dir .copilot-plugin` is only a hermetic dev/test fallback when debugging plugin artifacts; it is not treated as a successful install.
 
 **Want to add support for another agent?** See [docs/ADDING_A_HOST.md](docs/ADDING_A_HOST.md).
 It's one TypeScript config file, zero code changes.

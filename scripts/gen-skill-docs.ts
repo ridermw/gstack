@@ -466,6 +466,16 @@ policy:
 `;
 }
 
+function generateCopilotPluginJson(): string {
+  const version = fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf-8').trim();
+  return JSON.stringify({
+    name: 'gstack',
+    description: 'gstack skills for GitHub Copilot CLI',
+    version,
+    skills: 'skills/',
+  }, null, 2) + '\n';
+}
+
 /**
  * Transform frontmatter for external hosts.
  * Claude: strips `sensitive:` field (only Factory uses it).
@@ -1064,6 +1074,26 @@ The orchestrator will persist the plan link to its own memory/knowledge store.
 `;
       fs.writeFileSync(path.join(openclawDir, 'gstack-plan-CLAUDE.md'), gstackPlan);
       console.log('GENERATED: openclaw/gstack-plan-CLAUDE.md');
+    }
+
+    if (currentHost === 'copilot') {
+      const manifestPath = path.join(ROOT, '.copilot-plugin', 'plugin.json');
+      const manifest = generateCopilotPluginJson();
+      const relOutput = path.relative(ROOT, manifestPath);
+
+      if (DRY_RUN) {
+        const existing = fs.existsSync(manifestPath) ? fs.readFileSync(manifestPath, 'utf-8') : '';
+        if (existing !== manifest) {
+          console.log(`STALE: ${relOutput}`);
+          hasChanges = true;
+        } else {
+          console.log(`FRESH: ${relOutput}`);
+        }
+      } else {
+        fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+        fs.writeFileSync(manifestPath, manifest);
+        console.log(`GENERATED: ${relOutput}`);
+      }
     }
 
     if (DRY_RUN && hasChanges) {

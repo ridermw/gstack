@@ -239,7 +239,7 @@
       "voice_line": null
     },
     "setup-gbrain": {
-      "lead": "Set up gbrain for this coding agent: install the CLI, initialize a local PGLite or Supabase brain, register MCP, capture per-remote trust policy.",
+      "lead": "Set up gbrain for this coding agent: install the CLI, initialize a local PGLite or hosted-Postgres brain, register MCP, capture per-remote trust policy.",
       "routing": "One command from zero to \"gbrain is running, and this agent\ncan call it.\" Use when: \"setup gbrain\", \"connect gbrain\", \"start\ngbrain\", \"install gbrain\", \"configure gbrain for this machine\".",
       "voice_line": null
     },

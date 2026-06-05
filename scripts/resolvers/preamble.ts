@@ -7,12 +7,8 @@
  *
  * Each skill runs independently via `claude -p` (or the host's equivalent).
  * There is no shared loader. The preamble provides: update checks, session
- * tracking, user preferences, repo mode detection, model overlays, and
- * telemetry.
- *
- * Telemetry data flow:
- *   1. Always: local JSONL append to ~/.gstack/analytics/ (inline, inspectable)
- *   2. If _TEL != "off" AND binary exists: gstack-telemetry-log for remote reporting
+ * tracking, user preferences, repo mode detection, model overlays, and local
+ * diagnostics.
  */
 
 
@@ -28,9 +24,6 @@ import {
   generatePlanModeInfo,
 } from './preamble/generate-completion-status';
 
-// One-time onboarding prompts
-import { generateLakeIntro } from './preamble/generate-lake-intro';
-import { generateTelemetryPrompt } from './preamble/generate-telemetry-prompt';
 import { generateProactivePrompt } from './preamble/generate-proactive-prompt';
 import { generateRoutingInjection } from './preamble/generate-routing-injection';
 import { generateVendoringDeprecation } from './preamble/generate-vendoring-deprecation';
@@ -65,9 +58,9 @@ export { generateTestFailureTriage } from './preamble/generate-test-failure-tria
 
 // Preamble Composition (tier → sections)
 // ─────────────────────────────────────────────
-// T1: core + upgrade + lake + telemetry + voice(trimmed) + completion
-// T2: T1 + voice(full) + ask + completeness + context-recovery + confusion + checkpoint + context-health
-// T3: T2 + repo-mode + search
+// T1: core + upgrade + voice(trimmed) + completion
+// T2: T1 + voice(full) + ask + completeness + context-recovery + confusion + checkpoint + context-health + search
+// T3: T2 + repo-mode
 // T4: (same as T3 — TEST_FAILURE_TRIAGE is a separate {{}} placeholder, not preamble)
 //
 // Skills by tier:
@@ -84,15 +77,13 @@ export function generatePreamble(ctx: TemplateContext): string {
     generatePreambleBash(ctx),
     ...(ctx.skillName === 'make-pdf' ? [generateMakePdfSetup(ctx)] : []),
     // Plan-mode-skill semantics stays near the top: after bash (so _SESSION_ID /
-    // _BRANCH / _TEL env vars are live) and before all onboarding gates so
+    // _BRANCH env vars are live) and before all onboarding gates so
     // models read the authoritative "AskUserQuestion satisfies plan mode's
     // end-of-turn" rule before any other instruction. Renders for all skills
     // (not interactive-gated); the text applies universally.
     generatePlanModeInfo(ctx),
     generateUpgradeCheck(ctx),
     generateWritingStyleMigration(ctx),
-    generateLakeIntro(),
-    generateTelemetryPrompt(ctx),
     generateProactivePrompt(ctx),
     generateRoutingInjection(ctx),
     generateVendoringDeprecation(ctx),
@@ -115,7 +106,8 @@ export function generatePreamble(ctx: TemplateContext): string {
       generateContextHealth(ctx),
       generateQuestionTuning(ctx),
     ] : []),
-    ...(tier >= 3 ? [generateRepoModeSection(), generateSearchBeforeBuildingSection(ctx)] : []),
+    ...(tier >= 2 ? [generateSearchBeforeBuildingSection(ctx)] : []),
+    ...(tier >= 3 ? [generateRepoModeSection()] : []),
     generateCompletionStatus(ctx),
   ];
   return sections.filter(s => s && s.trim().length > 0).join('\n\n');

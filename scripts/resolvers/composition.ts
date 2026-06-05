@@ -23,11 +23,11 @@ export function generateInvokeSkill(ctx: TemplateContext, args?: string[]): stri
   const DEFAULT_SKIPS = [
     'Preamble (run first)',
     'AskUserQuestion Format',
-    'Completeness Principle — Boil the Lake',
+    'Completeness Principle',
     'Search Before Building',
     'Contributor Mode',
     'Completion Status Protocol',
-    'Telemetry (run last)',
+    'Local Diagnostics (run last)',
     'Step 0: Detect platform and base branch',
     'Review Readiness Dashboard',
     'Plan File Review Report',
