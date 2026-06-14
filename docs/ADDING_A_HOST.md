@@ -1,7 +1,7 @@
 # Adding a New Host to gstack
 
 gstack uses a declarative host config system. Each supported AI coding agent
-(Claude, Codex, Factory, Kiro, OpenCode, Slate, Cursor, OpenClaw) is defined
+(Claude, Codex, Copilot, Factory, Kiro, OpenCode, Slate, Cursor, OpenClaw) is defined
 as a typed TypeScript config object. Adding a new host means creating one file
 and re-exporting it. Zero code changes to the generator, setup, or tooling.
 
@@ -11,6 +11,7 @@ and re-exporting it. Zero code changes to the generator, setup, or tooling.
 hosts/
 ├── claude.ts        # Primary host
 ├── codex.ts         # OpenAI Codex CLI
+├── copilot.ts       # GitHub Copilot CLI plugin
 ├── factory.ts       # Factory Droid
 ├── kiro.ts          # Amazon Kiro
 ├── opencode.ts      # OpenCode
@@ -97,11 +98,11 @@ import myhost from './myhost';
 
 // Add to ALL_HOST_CONFIGS array:
 export const ALL_HOST_CONFIGS: HostConfig[] = [
-  claude, codex, factory, kiro, opencode, slate, cursor, openclaw, myhost
+  claude, codex, copilot, factory, kiro, opencode, slate, cursor, openclaw, myhost
 ];
 
 // Add to re-exports:
-export { claude, codex, factory, kiro, opencode, slate, cursor, openclaw, myhost };
+export { claude, codex, copilot, factory, kiro, opencode, slate, cursor, openclaw, myhost };
 ```
 
 ### 3. Add to .gitignore
@@ -131,11 +132,28 @@ bun run skill:check
 ```bash
 bun test test/gen-skill-docs.test.ts
 bun test test/host-config.test.ts
+# Hosts with bespoke setup contracts, like Copilot plugins, may also need
+# targeted tests such as test/setup-copilot-plugin-contract.test.ts.
 ```
 
 The parameterized smoke tests automatically pick up the new host. Zero test
 code to write. They verify: output exists, no path leakage, valid frontmatter,
 freshness check passes, codex skill excluded.
+
+### Copilot plugin installs
+
+Copilot is the current exception to the "one config only" happy path because the
+CLI installs a plugin directory, not loose skill files. `./setup --host copilot`
+is the persistent user path: it generates `.copilot-plugin/` and runs
+`copilot plugin install <absolute path>`. The generated plugin is then available
+from normal Copilot CLI sessions anywhere on the machine.
+
+Use `copilot --plugin-dir .copilot-plugin` only for hermetic development or E2E
+smoke testing of generated artifacts. That flag should be documented as a
+debug/test fallback, not as a successful persistent install. Parser tests for
+Copilot output should use crafted or captured JSON/JSONL fixtures; live E2E must
+skip when the `copilot` binary, auth, or persistent `gstack` plugin install is
+missing.
 
 ### 6. Update README.md
 

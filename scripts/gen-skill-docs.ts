@@ -733,6 +733,17 @@ function buildContext(
   };
 }
 
+function generateCopilotPluginJson(): string {
+  const version = fs.readFileSync(path.join(ROOT, 'VERSION'), 'utf-8').trim();
+  const pluginVersion = version.replace(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/, '$1.$2.$3+$4');
+  return JSON.stringify({
+    name: 'gstack',
+    description: 'gstack skills for GitHub Copilot CLI',
+    version: pluginVersion,
+    skills: 'skills/',
+  }, null, 2) + '\n';
+}
+
 /**
  * Process external host output: routing, frontmatter, path rewrites, metadata.
  * Shared between Codex and Factory (and future external hosts).
@@ -750,7 +761,7 @@ function processExternalHost(
 
   const name = externalSkillName(skillDir === '.' ? '' : skillDir, frontmatterName);
   const outputDir = path.join(ROOT, hostConfig.hostSubdir, 'skills', name);
-  fs.mkdirSync(outputDir, { recursive: true });
+  if (!DRY_RUN) fs.mkdirSync(outputDir, { recursive: true });
   const outputPath = path.join(outputDir, 'SKILL.md');
 
   // Guard against symlink loops
@@ -783,7 +794,7 @@ function processExternalHost(
   result = applyHostRewrites(result, hostConfig);
 
   // Config-driven: generate metadata (e.g., openai.yaml for Codex)
-  if (hostConfig.generation.generateMetadata && !symlinkLoop) {
+  if (hostConfig.generation.generateMetadata && !symlinkLoop && !DRY_RUN) {
     const agentsDir = path.join(outputDir, 'agents');
     fs.mkdirSync(agentsDir, { recursive: true });
     const shortDescription = condenseOpenAIShortDescription(extractedDescription);
@@ -949,6 +960,16 @@ for (const currentHost of hostsToRun) {
     }> = {};
 
     const currentHostConfig = getHostConfig(currentHost);
+    if (
+      DRY_RUN &&
+      HOST_ARG_VAL === 'all' &&
+      currentHost === 'copilot' &&
+      !fs.existsSync(path.join(ROOT, currentHostConfig.hostSubdir))
+    ) {
+      console.log(`SKIPPED (missing gitignored generated output): ${currentHostConfig.hostSubdir}`);
+      continue;
+    }
+
     for (const tmplPath of findTemplates()) {
       const dir = path.basename(path.dirname(tmplPath));
 
@@ -1113,6 +1134,26 @@ The orchestrator will persist the plan link to its own memory/knowledge store.
 `;
       fs.writeFileSync(path.join(openclawDir, 'gstack-plan-CLAUDE.md'), gstackPlan);
       console.log('GENERATED: openclaw/gstack-plan-CLAUDE.md');
+    }
+
+    if (currentHost === 'copilot') {
+      const manifestPath = path.join(ROOT, '.copilot-plugin', 'plugin.json');
+      const manifest = generateCopilotPluginJson();
+      const relOutput = path.relative(ROOT, manifestPath);
+
+      if (DRY_RUN) {
+        const existing = fs.existsSync(manifestPath) ? fs.readFileSync(manifestPath, 'utf-8') : '';
+        if (existing !== manifest) {
+          console.log(`STALE: ${relOutput}`);
+          hasChanges = true;
+        } else {
+          console.log(`FRESH: ${relOutput}`);
+        }
+      } else {
+        fs.mkdirSync(path.dirname(manifestPath), { recursive: true });
+        fs.writeFileSync(manifestPath, manifest);
+        console.log(`GENERATED: ${relOutput}`);
+      }
     }
 
     if (DRY_RUN && hasChanges) {

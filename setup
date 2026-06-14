@@ -24,6 +24,8 @@ FACTORY_SKILLS="$HOME/.factory/skills"
 FACTORY_GSTACK="$FACTORY_SKILLS/gstack"
 OPENCODE_SKILLS="$HOME/.config/opencode/skills"
 OPENCODE_GSTACK="$OPENCODE_SKILLS/gstack"
+COPILOT_PLUGIN_DIR="$SOURCE_GSTACK_DIR/.copilot-plugin"
+COPILOT_RUNTIME_ROOT="$HOME/.copilot/plugins/gstack"
 
 IS_WINDOWS=0
 case "$(uname -s)" in
@@ -77,6 +79,7 @@ log() { [ "$QUIET" -eq 0 ] && echo "$@" || true; }
 
 # ─── Parse flags ──────────────────────────────────────────────
 HOST="claude"
+HOST_EXPLICIT=0
 LOCAL_INSTALL=0
 SKILL_PREFIX=1
 SKILL_PREFIX_FLAG=0
@@ -85,8 +88,8 @@ NO_TEAM_MODE=0
 PLAN_TUNE_HOOKS_MODE=""   # "" = resolve from env/config/prompt; "yes"/"no" = explicit
 while [ $# -gt 0 ]; do
   case "$1" in
-    --host) [ -z "$2" ] && echo "Missing value for --host (expected claude, codex, kiro, factory, opencode, openclaw, hermes, gbrain, or auto)" >&2 && exit 1; HOST="$2"; shift 2 ;;
-    --host=*) HOST="${1#--host=}"; shift ;;
+    --host) [ -z "$2" ] && echo "Missing value for --host (expected claude, codex, kiro, factory, opencode, copilot, openclaw, hermes, gbrain, or auto)" >&2 && exit 1; HOST="$2"; HOST_EXPLICIT=1; shift 2 ;;
+    --host=*) HOST="${1#--host=}"; HOST_EXPLICIT=1; shift ;;
     --local) LOCAL_INSTALL=1; shift ;;
     --prefix)    SKILL_PREFIX=1; SKILL_PREFIX_FLAG=1; shift ;;
     --no-prefix) SKILL_PREFIX=0; SKILL_PREFIX_FLAG=1; shift ;;
@@ -100,8 +103,20 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# ─── Resolve saved default host preference ───────────────────
+# Priority: explicit --host flag > saved default_host config > built-in default.
+# This makes "first choice" sticky: once you run `./setup --host copilot`, every
+# later bare `./setup` targets Copilot until you pick another host.
+GSTACK_CONFIG="$SOURCE_GSTACK_DIR/bin/gstack-config"
+if [ "$HOST_EXPLICIT" -eq 0 ]; then
+  _saved_host="$("$GSTACK_CONFIG" get default_host 2>/dev/null || true)"
+  if [ -n "$_saved_host" ]; then
+    HOST="$_saved_host"
+  fi
+fi
+
 case "$HOST" in
-  claude|codex|kiro|factory|opencode|auto) ;;
+  claude|codex|kiro|factory|opencode|copilot|auto) ;;
   openclaw)
     echo ""
     echo "OpenClaw integration uses a different model — OpenClaw spawns Claude Code"
@@ -136,13 +151,19 @@ case "$HOST" in
     echo "GBrain setup and brain skills ship from the GBrain repo."
     echo ""
     exit 0 ;;
-  *) echo "Unknown --host value: $HOST (expected claude, codex, kiro, factory, opencode, openclaw, hermes, gbrain, or auto)" >&2; exit 1 ;;
+  *) echo "Unknown --host value: $HOST (expected claude, codex, kiro, factory, opencode, copilot, openclaw, hermes, gbrain, or auto)" >&2; exit 1 ;;
 esac
 
 # ─── Resolve skill prefix preference ─────────────────────────
 # Priority: CLI flag > saved config > interactive prompt (or flat default for non-TTY)
 GSTACK_CONFIG="$SOURCE_GSTACK_DIR/bin/gstack-config"
 export GSTACK_SETUP_RUNNING=1  # Prevent gstack-config post-set hook from triggering relink mid-setup
+
+# Persist an explicit --host choice as the saved default for future bare runs.
+# Only installable hosts reach here (openclaw/hermes/gbrain exit earlier).
+if [ "$HOST_EXPLICIT" -eq 1 ]; then
+  "$GSTACK_CONFIG" set default_host "$HOST" 2>/dev/null || true
+fi
 if [ "$SKILL_PREFIX_FLAG" -eq 0 ]; then
   _saved_prefix="$("$GSTACK_CONFIG" get skill_prefix 2>/dev/null || true)"
   if [ "$_saved_prefix" = "true" ]; then
@@ -200,15 +221,22 @@ INSTALL_CODEX=0
 INSTALL_KIRO=0
 INSTALL_FACTORY=0
 INSTALL_OPENCODE=0
+INSTALL_COPILOT=0
 if [ "$HOST" = "auto" ]; then
-  command -v claude >/dev/null 2>&1 && INSTALL_CLAUDE=1
-  command -v codex >/dev/null 2>&1 && INSTALL_CODEX=1
-  command -v kiro-cli >/dev/null 2>&1 && INSTALL_KIRO=1
-  command -v droid >/dev/null 2>&1 && INSTALL_FACTORY=1
-  command -v opencode >/dev/null 2>&1 && INSTALL_OPENCODE=1
-  # If none found, default to claude
-  if [ "$INSTALL_CLAUDE" -eq 0 ] && [ "$INSTALL_CODEX" -eq 0 ] && [ "$INSTALL_KIRO" -eq 0 ] && [ "$INSTALL_FACTORY" -eq 0 ] && [ "$INSTALL_OPENCODE" -eq 0 ]; then
-    INSTALL_CLAUDE=1
+  # Copilot is the first-choice host when its CLI is present: prefer it over
+  # claude/codex/etc. so a bare `./setup --host auto` lands on Copilot.
+  if command -v copilot >/dev/null 2>&1; then
+    INSTALL_COPILOT=1
+  else
+    command -v claude >/dev/null 2>&1 && INSTALL_CLAUDE=1
+    command -v codex >/dev/null 2>&1 && INSTALL_CODEX=1
+    command -v kiro-cli >/dev/null 2>&1 && INSTALL_KIRO=1
+    command -v droid >/dev/null 2>&1 && INSTALL_FACTORY=1
+    command -v opencode >/dev/null 2>&1 && INSTALL_OPENCODE=1
+    # If none found, default to claude
+    if [ "$INSTALL_CLAUDE" -eq 0 ] && [ "$INSTALL_CODEX" -eq 0 ] && [ "$INSTALL_KIRO" -eq 0 ] && [ "$INSTALL_FACTORY" -eq 0 ] && [ "$INSTALL_OPENCODE" -eq 0 ]; then
+      INSTALL_CLAUDE=1
+    fi
   fi
 elif [ "$HOST" = "claude" ]; then
   INSTALL_CLAUDE=1
@@ -220,6 +248,8 @@ elif [ "$HOST" = "factory" ]; then
   INSTALL_FACTORY=1
 elif [ "$HOST" = "opencode" ]; then
   INSTALL_OPENCODE=1
+elif [ "$HOST" = "copilot" ]; then
+  INSTALL_COPILOT=1
 fi
 
 migrate_direct_codex_install() {
@@ -474,6 +504,57 @@ if [ "$INSTALL_OPENCODE" -eq 1 ] && [ "$NEEDS_BUILD" -eq 0 ]; then
     bun_cmd run gen:skill-docs --host opencode
   )
 fi
+
+# 1e. Generate .copilot-plugin/ GitHub Copilot CLI plugin docs before install.
+if [ "$INSTALL_COPILOT" -eq 1 ]; then
+  log "Generating .copilot-plugin skill docs..."
+  (
+    cd "$SOURCE_GSTACK_DIR"
+    bun_cmd install --frozen-lockfile 2>/dev/null || bun_cmd install
+    bun_cmd run gen:skill-docs --host copilot
+  )
+fi
+
+install_copilot_plugin() {
+  if ! command -v copilot >/dev/null 2>&1; then
+    echo "gstack setup failed: GitHub Copilot CLI not found on PATH" >&2
+    echo "  Install Copilot CLI, then rerun: ./setup --host copilot" >&2
+    return 1
+  fi
+
+  if [ ! -f "$COPILOT_PLUGIN_DIR/plugin.json" ] || [ ! -d "$COPILOT_PLUGIN_DIR/skills" ]; then
+    echo "gstack setup failed: Copilot plugin artifacts missing at $COPILOT_PLUGIN_DIR" >&2
+    echo "  Regenerate them with: bun run gen:skill-docs --host copilot" >&2
+    return 1
+  fi
+
+  local installed_plugins
+  if ! installed_plugins="$(copilot plugin list 2>&1)"; then
+    echo "gstack setup failed: could not check existing Copilot plugins" >&2
+    echo "$installed_plugins" >&2
+    return 1
+  fi
+
+  if printf '%s\n' "$installed_plugins" | grep -E '(^|[[:space:]•])gstack(@|[[:space:]]|$)' >/dev/null 2>&1; then
+    log "Existing gstack Copilot plugin found; reinstalling..."
+    if ! copilot plugin uninstall gstack; then
+      echo "gstack setup failed: could not uninstall existing Copilot plugin 'gstack'" >&2
+      echo "  Retry manually: copilot plugin uninstall gstack" >&2
+      return 1
+    fi
+  fi
+
+  if ! copilot plugin install "$COPILOT_PLUGIN_DIR"; then
+    echo "gstack setup failed: Copilot plugin install failed" >&2
+    echo "  Development-only fallback for debugging (not a persistent install):" >&2
+    echo '    copilot --plugin-dir "$COPILOT_PLUGIN_DIR"' >&2
+    return 1
+  fi
+
+  log "gstack ready (copilot)."
+  log "  plugin: $COPILOT_PLUGIN_DIR"
+  log "  uninstall: copilot plugin uninstall gstack"
+}
 
 # 2. Ensure Playwright's Chromium is available
 if ! ensure_playwright_browser; then
@@ -908,6 +989,44 @@ create_opencode_runtime_root() {
   fi
 }
 
+create_copilot_runtime_root() {
+  local gstack_dir="$1"
+  local copilot_gstack="$2"
+  local copilot_skills_dir="$gstack_dir/.copilot-plugin/skills"
+
+  if [ -L "$copilot_gstack" ]; then
+    rm -f "$copilot_gstack"
+  elif [ -d "$copilot_gstack" ] && [ "$copilot_gstack" != "$gstack_dir" ]; then
+    rm -rf "$copilot_gstack"
+  fi
+
+  mkdir -p "$copilot_gstack"
+
+  if [ -f "$copilot_skills_dir/gstack/SKILL.md" ]; then
+    _link_or_copy "$copilot_skills_dir/gstack/SKILL.md" "$copilot_gstack/SKILL.md"
+  fi
+
+  for asset in bin browse design design-html gstack-upgrade ios-qa lib office-hours plan-ceo-review plan-design-review plan-devex-review plan-eng-review review scripts; do
+    local src="$gstack_dir/$asset"
+    local dst="$copilot_gstack/$asset"
+    if [ -d "$src" ] || [ -f "$src" ]; then
+      if [ -L "$dst" ] || [ ! -e "$dst" ]; then
+        _link_or_copy "$src" "$dst"
+      fi
+    fi
+  done
+
+  for file in ETHOS.md VERSION; do
+    local src="$gstack_dir/$file"
+    local dst="$copilot_gstack/$file"
+    if [ -f "$src" ]; then
+      if [ -L "$dst" ] || [ ! -e "$dst" ]; then
+        _link_or_copy "$src" "$dst"
+      fi
+    fi
+  done
+}
+
 link_factory_skill_dirs() {
   local gstack_dir="$1"
   local skills_dir="$2"
@@ -978,6 +1097,15 @@ SKILLS_PARENT_BASENAME="$(basename "$(dirname "$INSTALL_SKILLS_DIR")")"
 CODEX_REPO_LOCAL=0
 if [ "$SKILLS_BASENAME" = "skills" ] && [ "$SKILLS_PARENT_BASENAME" = ".agents" ]; then
   CODEX_REPO_LOCAL=1
+fi
+
+# 4a. Install for GitHub Copilot CLI (first-choice host)
+if [ "$INSTALL_COPILOT" -eq 1 ]; then
+  create_copilot_runtime_root "$SOURCE_GSTACK_DIR" "$COPILOT_RUNTIME_ROOT"
+  if install_copilot_plugin; then
+    # Make Copilot the sticky default for future bare `./setup` runs.
+    "$GSTACK_CONFIG" set default_host copilot 2>/dev/null || true
+  fi
 fi
 
 if [ "$INSTALL_CLAUDE" -eq 1 ]; then
