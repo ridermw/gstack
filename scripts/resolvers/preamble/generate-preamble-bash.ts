@@ -3,10 +3,19 @@ import { getHostConfig } from '../../../hosts/index';
 
 export function generatePreambleBash(ctx: TemplateContext): string {
   const hostConfig = getHostConfig(ctx.host);
+  // The local-skill-root override only applies when that root is a real gstack
+  // runtime tree — i.e. it actually contains a `bin/` directory. For most
+  // env-var hosts (codex/kiro/factory/opencode) localSkillRoot points at the
+  // gstack dir itself (which has bin/), so the override correctly prefers the
+  // in-checkout copy. Copilot's localSkillRoot ('.copilot-plugin/skills') is a
+  // container of generated skill dirs with NO bin/, so guarding on bin/ keeps
+  // GSTACK_ROOT (and GSTACK_BIN/BROWSE/DESIGN) pointed at the global runtime
+  // root that setup populates, instead of a skills container where the gstack
+  // binaries don't exist.
   const runtimeRoot = hostConfig.usesEnvVars
     ? `_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
 GSTACK_ROOT="$HOME/${hostConfig.globalRoot}"
-[ -n "$_ROOT" ] && [ -d "$_ROOT/${ctx.paths.localSkillRoot}" ] && GSTACK_ROOT="$_ROOT/${ctx.paths.localSkillRoot}"
+[ -n "$_ROOT" ] && [ -d "$_ROOT/${ctx.paths.localSkillRoot}/bin" ] && GSTACK_ROOT="$_ROOT/${ctx.paths.localSkillRoot}"
 GSTACK_BIN="$GSTACK_ROOT/bin"
 GSTACK_BROWSE="$GSTACK_ROOT/browse/dist"
 GSTACK_DESIGN="$GSTACK_ROOT/design/dist"

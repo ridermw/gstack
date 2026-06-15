@@ -275,6 +275,9 @@ export const E2E_TOUCHFILES: Record<string, string[]> = {
   // Gemini E2E — smoke test only (Gemini gets lost in worktrees on complex tasks)
   'gemini-smoke':  ['.agents/skills/**', 'test/helpers/gemini-session-runner.ts', 'lib/worktree.ts'],
 
+  // Copilot E2E — plugin smoke only until Copilot exposes stable JSON agent output
+  'copilot-smoke': ['.copilot-plugin/**', 'hosts/copilot.ts', 'setup', 'test/helpers/copilot-session-runner.ts'],
+
 
   // Coverage audit (shared fixture) + triage + gates
   'ship-coverage-audit': ['ship/**', 'test/fixtures/coverage-audit-fixture.ts', 'bin/gstack-repo-mode'],
@@ -665,6 +668,7 @@ export const E2E_TIERS: Record<string, 'gate' | 'periodic'> = {
   'codex-discover-skill': 'periodic',
   'codex-review-findings': 'periodic',
   'gemini-smoke': 'periodic',
+  'copilot-smoke': 'periodic',
 
   // Design — gate for cheap functional, periodic for Opus/quality
   'design-consultation-core': 'periodic',

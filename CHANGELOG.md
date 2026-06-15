@@ -1,5 +1,70 @@
 # Changelog
 
+## [1.59.0.0] - 2026-06-14
+
+## **GitHub Copilot CLI is now a first-class gstack host, and it can be your default.**
+## **One `./setup --host copilot` puts all 54 skills inside Copilot and makes it sticky.**
+
+gstack now installs into GitHub Copilot CLI as a native plugin, the same way it
+already targets Claude Code and Codex. Run `./setup --host copilot` and every
+gstack skill (ship, review, investigate, qa, the whole set) shows up inside
+Copilot CLI, routed through Copilot's own plugin system. Copilot is not just
+supported, it can be your first choice: a bare `./setup` with the Copilot CLI on
+your PATH now prefers Copilot over Claude and Codex, and the choice sticks. The
+new `default_host` config remembers which host you picked, so you set it once and
+every future setup run targets the same place. Pass `--host claude` (or any other
+host) any time you want to override, and that becomes the new saved default.
+
+### The numbers that matter
+
+Measured on this repo with Copilot CLI 1.0.61 installed. Reproduce:
+`./setup --host copilot && copilot plugin list && bin/gstack-config get default_host`.
+
+| Metric | Before | After | Δ |
+|--------|--------|-------|---|
+| gstack skills inside Copilot CLI | 0 | 54 | all of them |
+| Supported hosts | 10 | 11 | +copilot |
+| Saved host preference | none | `default_host` config | sticky |
+| Bare `./setup` with Copilot present | targets Claude | prefers Copilot | first choice |
+| Copilot install command | n/a | `./setup --host copilot` | one line |
+
+The sticky default is the part to notice: install Copilot once and it becomes the
+remembered target, so you never retype `--host` to land in the same place twice.
+
+### What this means for your workflow
+
+If you live in GitHub Copilot CLI, gstack now meets you there. Install once with
+`./setup --host copilot`, and ship, review, investigate, and qa are available
+inside Copilot with no per-session flags. Switch hosts whenever you want by
+passing `--host`, and gstack remembers the switch. Uninstall cleanly any time with
+`copilot plugin uninstall gstack`.
+
+### Itemized changes
+
+#### Added
+- GitHub Copilot CLI as a first-class host. `./setup --host copilot` generates a
+  Copilot plugin under `.copilot-plugin/` (a `plugin.json` manifest plus every
+  skill under `.copilot-plugin/skills/<name>/SKILL.md`), installs it via
+  `copilot plugin install`, and creates the runtime root at
+  `~/.copilot/plugins/gstack`.
+- `default_host` config key (`bin/gstack-config get/set default_host`). An explicit
+  `--host X` is saved as your default; a bare `./setup` reads it back. Installing
+  Copilot persists `default_host=copilot` so it stays your first choice.
+- Auto-detect now prefers Copilot. `./setup --host auto` (and a bare `./setup`
+  with no saved default) installs into Copilot CLI when the `copilot` binary is on
+  your PATH, before falling back to Claude, Codex, or other detected hosts.
+- `hosts/copilot.ts` host config, registered in `hosts/index.ts` (11 hosts total).
+- `test:copilot` / `test:copilot:all` package scripts for the Copilot E2E harness.
+
+#### For contributors
+- Copilot plugin generation lives in `scripts/gen-skill-docs.ts`
+  (`generateCopilotPluginJson()` plus DRY_RUN guards so `--dry-run` never writes).
+- Contract coverage in `test/setup-copilot-plugin-contract.test.ts` pins the setup
+  install flow, the auto-prefers-Copilot ordering, and `default_host` persistence.
+  Session-runner and E2E harness ported in `test/helpers/copilot-session-runner.ts`
+  and `test/copilot-e2e.test.ts`, tier-gated as `periodic`.
+- `docs/ADDING_A_HOST.md` documents the Copilot plugin install model.
+
 ## [1.58.1.0] - 2026-06-14
 
 ## **Local evals stop lying. Spawned `claude` test children run in a sealed clean room,**

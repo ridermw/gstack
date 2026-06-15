@@ -41,6 +41,7 @@ const PAID_EVAL_TESTS = [
   /^test\/skill-routing-e2e\.test\.ts$/,
   /^test\/codex-e2e\.test\.ts$/,
   /^test\/gemini-e2e\.test\.ts$/,
+  /^test\/copilot-e2e\.test\.ts$/,
 ] as const;
 
 // POSIX-only patterns that indicate a test will fail on windows-latest no
