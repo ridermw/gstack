@@ -112,6 +112,13 @@ if [ "$HOST_EXPLICIT" -eq 0 ]; then
   _saved_host="$("$GSTACK_CONFIG" get default_host 2>/dev/null || true)"
   if [ -n "$_saved_host" ]; then
     HOST="$_saved_host"
+  elif command -v copilot >/dev/null 2>&1; then
+    # No explicit --host and no saved preference, but the Copilot CLI is
+    # present: honor Copilot's first-choice status. A bare `./setup` on a fresh
+    # machine that has Copilot installed targets Copilot rather than falling
+    # through to the built-in claude default (which would silently install
+    # Claude and break the advertised first-choice behavior for new users).
+    HOST="copilot"
   fi
 fi
 
@@ -1006,7 +1013,7 @@ create_copilot_runtime_root() {
     _link_or_copy "$copilot_skills_dir/gstack/SKILL.md" "$copilot_gstack/SKILL.md"
   fi
 
-  for asset in bin browse design design-html gstack-upgrade ios-qa lib office-hours plan-ceo-review plan-design-review plan-devex-review plan-eng-review review scripts; do
+  for asset in bin browse design design-html gstack-upgrade ios-qa lib office-hours plan-ceo-review plan-design-review plan-devex-review plan-eng-review qa review scripts; do
     local src="$gstack_dir/$asset"
     local dst="$copilot_gstack/$asset"
     if [ -d "$src" ] || [ -f "$src" ]; then

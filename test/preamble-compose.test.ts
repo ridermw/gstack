@@ -80,3 +80,23 @@ describe('Conductor signal (preamble bash)', () => {
     expect(out).toMatch(/"\$_SESSION_KIND" != "headless"[\s\S]*CONDUCTOR_WORKSPACE_PATH[\s\S]*CONDUCTOR_PORT[\s\S]*CONDUCTOR_SESSION: true/);
   });
 });
+
+describe('Copilot runtime root (PR #3 review)', () => {
+  test('GSTACK_ROOT local override is gated on localSkillRoot/bin existing', () => {
+    const ctx: TemplateContext = {
+      skillName: 'test-skill',
+      tmplPath: 'test.tmpl',
+      host: 'copilot',
+      paths: HOST_PATHS['copilot'],
+      preambleTier: 2,
+    };
+    const out = generatePreamble(ctx);
+    // The override must require a real runtime tree (bin/) before repointing
+    // GSTACK_ROOT. For Copilot, '.copilot-plugin/skills' is a container of
+    // generated skill dirs with no bin/, so the guard keeps GSTACK_ROOT (and
+    // GSTACK_BIN/BROWSE/DESIGN) at the global runtime root setup populates.
+    expect(out).toContain('[ -d "$_ROOT/.copilot-plugin/skills/bin" ] && GSTACK_ROOT="$_ROOT/.copilot-plugin/skills"');
+    // The un-guarded directory check (skills container without /bin) must be gone.
+    expect(out).not.toContain('[ -d "$_ROOT/.copilot-plugin/skills" ] && GSTACK_ROOT=');
+  });
+});

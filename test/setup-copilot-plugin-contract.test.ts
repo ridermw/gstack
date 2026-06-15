@@ -150,7 +150,7 @@ describe('setup: Copilot local plugin contract', () => {
     expect(runtimeCreateIndex).toBeGreaterThan(runtimeVarIndex);
     expect(installCallIndex).toBeGreaterThan(runtimeCreateIndex);
     expect(runtimeHelperBody).toContain('.copilot-plugin/skills');
-    expect(runtimeHelperBody).toContain('bin browse design design-html gstack-upgrade ios-qa lib office-hours plan-ceo-review plan-design-review plan-devex-review plan-eng-review review scripts');
+    expect(runtimeHelperBody).toContain('bin browse design design-html gstack-upgrade ios-qa lib office-hours plan-ceo-review plan-design-review plan-devex-review plan-eng-review qa review scripts');
     expect(runtimeHelperBody).toContain('ETHOS.md VERSION');
   });
 
@@ -246,5 +246,26 @@ describe('setup: default host preference', () => {
     const stickyIdx = SETUP_CODE.indexOf('set default_host copilot');
     expect(installIdx).toBeGreaterThanOrEqual(0);
     expect(stickyIdx).toBeGreaterThan(installIdx);
+  });
+
+  test('a bare run with no saved default prefers Copilot when its CLI is present', () => {
+    // Regression: a bare `./setup` (no --host, no saved default_host) must not
+    // silently fall through to the built-in claude default when Copilot is
+    // installed — that would break the advertised first-choice behavior for new
+    // users. The no-saved-default branch detects the copilot binary and targets it.
+    // (SETUP_CODE strips comments, so anchor on the resolution code itself.)
+    const resolveStart = SETUP_CODE.indexOf('get default_host');
+    expect(resolveStart).toBeGreaterThanOrEqual(0);
+    const resolveEnd = SETUP_CODE.indexOf('case "$HOST" in', resolveStart);
+    const resolveBlock = SETUP_CODE.slice(resolveStart, resolveEnd > resolveStart ? resolveEnd : undefined);
+    expect(/command -v copilot/.test(resolveBlock)).toBe(true);
+    expect(/HOST="?copilot"?/.test(resolveBlock)).toBe(true);
+  });
+
+  test('Copilot runtime root includes qa assets referenced by the QA skill', () => {
+    // qa/SKILL.md copies qa/templates/qa-report-template.md and reads
+    // qa/references, so the Copilot runtime root must materialize the qa tree.
+    const runtimeHelperBody = stripShellComments(shellFunctionBody(SETUP, 'create_copilot_runtime_root'));
+    expect(/\bqa\b/.test(runtimeHelperBody)).toBe(true);
   });
 });
